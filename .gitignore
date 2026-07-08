@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# 本地服务日志
+server.out.log
+server.err.log
+
+# 构建产物(由 GitHub Actions 生成并部署, 无需提交)
+site/
+
+# 运行日志与大文件(out/*.csv 与 options_snapshot.json 作为种子数据保留)
+out/*.txt
+out/*_cboe_raw.json
+out/*.png

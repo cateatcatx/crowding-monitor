@@ -1,0 +1,51 @@
+name: build-and-deploy
+
+on:
+  # 手动触发(Actions 页面 "Run workflow")
+  workflow_dispatch:
+  # 推送到 main 时构建
+  push:
+    branches: [main]
+  # 定时(UTC): 01:00 = 北京09:00(美股收盘后); 07:00 = 北京15:00(韩股收盘后)
+  schedule:
+    - cron: "0 1 * * *"
+    - cron: "0 7 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 不取消进行中的部署, 但同一时间只跑一个
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Build static site
+        run: python -X utf8 build_static.py
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

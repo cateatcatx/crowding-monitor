@@ -1,0 +1,44 @@
+[
+  {
+    "ticker": "MU",
+    "spot": 914.8698,
+    "asof": "2026-07-08 17:00",
+    "total_oi": 3548682.0,
+    "total_volume": 722375.0,
+    "pc_ratio_oi": 1.345,
+    "pc_ratio_vol": 0.996,
+    "near_atm_iv_pct": 102.6,
+    "near_call25d_iv_pct": 101.0,
+    "near_put25d_iv_pct": 105.9,
+    "skew_call_minus_put_pct": -4.89,
+    "near_otm_call_oi_share_pct": 17.8
+  },
+  {
+    "ticker": "SNDK",
+    "spot": 1578.2,
+    "asof": "2026-07-08 17:00",
+    "total_oi": 817850.0,
+    "total_volume": 200304.0,
+    "pc_ratio_oi": 1.401,
+    "pc_ratio_vol": 1.209,
+    "near_atm_iv_pct": 132.4,
+    "near_call25d_iv_pct": 127.9,
+    "near_put25d_iv_pct": 137.5,
+    "skew_call_minus_put_pct": -9.64,
+    "near_otm_call_oi_share_pct": 20.3
+  },
+  {
+    "ticker": "WDC",
+    "spot": 526.99,
+    "asof": "2026-07-08 17:00",
+    "total_oi": 468275.0,
+    "total_volume": 59267.0,
+    "pc_ratio_oi": 1.727,
+    "pc_ratio_vol": 1.962,
+    "near_atm_iv_pct": 109.0,
+    "near_call25d_iv_pct": 107.5,
+    "near_put25d_iv_pct": 113.6,
+    "skew_call_minus_put_pct": -6.15,
+    "near_otm_call_oi_share_pct": 23.2
+  }
+]
