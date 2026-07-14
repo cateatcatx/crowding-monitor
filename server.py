@@ -127,6 +127,7 @@ def assemble_dashboard():
     score_series = {}
     rv_series = {}
     vol_pct_frames = {}
+    close_frames = {}
     dates_union = None
 
     for t in TARGETS:
@@ -177,6 +178,7 @@ def assemble_dashboard():
         rv_series[t["key"]] = {d.strftime("%y/%m/%d"): round(v, 1) for d, v in rv_s.items()}
 
         vol_pct_frames[t["key"]] = df["volatility"]
+        close_frames[t["key"]] = df["close"]
 
     score_dates = sorted(dates_union)
     score_chart = {
@@ -202,6 +204,17 @@ def assemble_dashboard():
                       parse_dates=["date"]).set_index("date")
     tlast = tdf.iloc[-1]
     tsel = tdf[tdf.index >= tdf.index[-1] - pd.Timedelta(days=380)]
+
+    # 各标的价格归一化(窗口起点=100), 对齐TCI日期; 跨市场休市日用前值填充
+    price_series = {}
+    for key, close in close_frames.items():
+        aligned = close.reindex(tsel.index).ffill(limit=5)
+        base = aligned.dropna()
+        if base.empty:
+            continue
+        norm = aligned / base.iloc[0] * 100
+        price_series[key] = [round(v, 1) if pd.notna(v) else None for v in norm]
+
     tci = {
         "date": tdf.index[-1].strftime("%Y-%m-%d"),
         "value": round(float(tlast["tci"]), 1),
@@ -212,6 +225,7 @@ def assemble_dashboard():
         "chart": {
             "dates": [d.strftime("%y/%m/%d") for d in tsel.index],
             "values": [round(v, 1) if pd.notna(v) else None for v in tsel["tci"]],
+            "prices": price_series,
         },
         "recent": [
             {"date": d.strftime("%m-%d"), "value": round(v, 1)}
