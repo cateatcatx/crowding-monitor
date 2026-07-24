@@ -7,7 +7,7 @@
 ## 原理
 
 - `build_static.py` 在 GitHub 的服务器上跑数据管线(拉新浪/Naver/CBOE → 算分 → 生成 `dashboard.json`), 连同网页一起发布到 GitHub Pages。
-- `.github/workflows/deploy.yml` 定时触发(北京时间约 09:00 / 17:40), 也可在网页上手动触发。第二次更新安排在KRX第二批日终投资者数据落地后。
+- `.github/workflows/deploy.yml` 定时触发(北京时间约 09:00 / 19:30), 也可在网页上手动触发。第二次更新安排在NXT晚间收盘后, 并用ALL/KRX/NXT逐市场新鲜度校验确认数据已落地。
 - 页面前端优先读构建好的 `dashboard.json`(静态); 在你本机用 `server.py` 打开时仍走实时接口, 两种模式同一份 `index.html`。
 
 ## 一次性设置(约 5 分钟)
@@ -38,7 +38,7 @@ git push -u origin main
 
 ## 日常
 
-- 什么都不用做: 每交易日约 09:00 / 17:40(北京)自动重建并更新数据。
+- 什么都不用做: 每交易日约 09:00 / 19:30(北京)自动重建并更新数据。
 - 想立即更新: Actions 页面点 "Run workflow"; 或本机运行 `python build_static.py` 后 `git commit`/`push`(会触发重建)。
 - 网页上的"刷新页面"按钮只是重新加载当前已发布的数据。
 

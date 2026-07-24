@@ -134,13 +134,14 @@ def _json_float(value, digits=2):
 
 
 def assemble_foreign_flow(quote_asof=None):
-    """组装 SK 海力士 KRX 外资净买卖摘要和每日序列。"""
+    """组装 SK 海力士 ALL（KRX+NXT）及分市场外资流向。"""
     if not os.path.exists(FOREIGN_FLOW_FILE):
         return None
 
     df = pd.read_csv(FOREIGN_FLOW_FILE, dtype={"ticker": str})
     required = {
         "date",
+        "market",
         "foreign_net_shares",
         "foreign_holding_ratio_pct",
     }
@@ -160,26 +161,34 @@ def assemble_foreign_flow(quote_asof=None):
             df[column] = pd.to_numeric(df[column], errors="coerce")
     df = (
         df.dropna(subset=["date", "foreign_net_shares"])
-        .sort_values("date")
-        .drop_duplicates("date", keep="last")
+        .sort_values(["date", "market"])
+        .drop_duplicates(["date", "market"], keep="last")
     )
     if df.empty:
         return None
 
-    latest = df.iloc[-1]
+    market_frames = {
+        market: df[df["market"] == market].sort_values("date")
+        for market in ["ALL", "KRX", "NXT"]
+    }
+    if market_frames["ALL"].empty:
+        return None
+
+    primary = market_frames["ALL"]
+    latest = primary.iloc[-1]
     ratio_change = None
     if (
-        len(df) >= 2
+        len(primary) >= 2
         and pd.notna(latest.get("foreign_holding_ratio_pct"))
-        and pd.notna(df.iloc[-2].get("foreign_holding_ratio_pct"))
+        and pd.notna(primary.iloc[-2].get("foreign_holding_ratio_pct"))
     ):
         ratio_change = round(float(
             latest["foreign_holding_ratio_pct"]
-            - df.iloc[-2]["foreign_holding_ratio_pct"]
+            - primary.iloc[-2]["foreign_holding_ratio_pct"]
         ), 2)
 
-    chart_df = df.tail(90)
-    recent_df = df.tail(10).iloc[::-1]
+    chart_df = primary.tail(90)
+    recent_df = primary.tail(10).iloc[::-1]
     quote_date = pd.to_datetime(quote_asof, errors="coerce") if quote_asof else pd.NaT
     stale = bool(pd.notna(quote_date) and latest["date"].normalize() < quote_date.normalize())
 
@@ -187,15 +196,92 @@ def assemble_foreign_flow(quote_asof=None):
         value = row.get(column)
         return int(value) if pd.notna(value) else None
 
+    def market_summary(market):
+        selected = market_frames[market]
+        if selected.empty:
+            return None
+        row = selected.iloc[-1]
+        indexed_flow = selected.set_index("date")["foreign_net_shares"]
+
+        def aligned_sum(days):
+            values = indexed_flow.reindex(primary["date"].tail(days))
+            if values.isna().any():
+                return None
+            return int(values.sum())
+
+        return {
+            "market": market,
+            "asof": row["date"].strftime("%Y-%m-%d"),
+            "latest_net_shares": int(row["foreign_net_shares"]),
+            "sum_5d_net_shares": aligned_sum(5),
+            "sum_20d_net_shares": aligned_sum(20),
+        }
+
+    def align_market(market, dates):
+        selected = market_frames[market].set_index("date")["foreign_net_shares"]
+        return [
+            int(value) if pd.notna(value) else None
+            for value in selected.reindex(dates)
+        ]
+
+    indexed = {
+        market: frame.set_index("date")
+        for market, frame in market_frames.items()
+    }
+
+    def recent_record(row):
+        flow_date = row["date"]
+        krx = indexed["KRX"].loc[flow_date] if flow_date in indexed["KRX"].index else None
+        nxt = indexed["NXT"].loc[flow_date] if flow_date in indexed["NXT"].index else None
+        return {
+            "date": flow_date.strftime("%m-%d"),
+            "foreign_net_shares": int(row["foreign_net_shares"]),
+            "total_net_shares": int(row["foreign_net_shares"]),
+            "krx_net_shares": int_or_none(krx, "foreign_net_shares")
+            if krx is not None else None,
+            "nxt_net_shares": int_or_none(nxt, "foreign_net_shares")
+            if nxt is not None else None,
+            "holding_ratio_pct": _json_float(
+                row.get("foreign_holding_ratio_pct")
+            ),
+            "close_krw": int_or_none(krx, "close_krw")
+            if krx is not None else None,
+        }
+
+    venues = {
+        market: market_summary(market)
+        for market in ["ALL", "KRX", "NXT"]
+    }
+    check_dates = primary["date"].tail(20)
+    check_all = primary.set_index("date")["foreign_net_shares"].reindex(
+        check_dates
+    )
+    check_krx = market_frames["KRX"].set_index("date")[
+        "foreign_net_shares"
+    ].reindex(check_dates)
+    check_nxt = market_frames["NXT"].set_index("date")[
+        "foreign_net_shares"
+    ].reindex(check_dates)
+    latest_component_ok = bool(
+        venues["KRX"]
+        and venues["NXT"]
+        and venues["KRX"]["asof"] == venues["ALL"]["asof"]
+        and venues["NXT"]["asof"] == venues["ALL"]["asof"]
+        and not check_krx.isna().any()
+        and not check_nxt.isna().any()
+        and (check_all == check_krx + check_nxt).all()
+    )
+
     return {
         "ticker": str(latest.get("ticker", "000660")).zfill(6),
         "label": "SK海力士",
-        "market": str(latest.get("market", "KRX")),
+        "market": "ALL",
+        "market_label": "全市场（KRX+NXT）",
         "source": str(latest.get("source", "Naver Finance")),
         "source_url": str(latest.get(
             "source_url",
             "https://m.stock.naver.com/domestic/stock/000660/"
-            "tradingTrend?marketType=KRX",
+            "tradingTrend?marketType=ALL",
         )),
         "asof": latest["date"].strftime("%Y-%m-%d"),
         "quote_asof": quote_date.strftime("%Y-%m-%d") if pd.notna(quote_date) else None,
@@ -204,33 +290,30 @@ def assemble_foreign_flow(quote_asof=None):
         "latest_direction": "inflow" if latest["foreign_net_shares"] > 0 else (
             "outflow" if latest["foreign_net_shares"] < 0 else "flat"
         ),
-        "sum_5d_net_shares": int(df["foreign_net_shares"].tail(5).sum()),
-        "sum_20d_net_shares": int(df["foreign_net_shares"].tail(20).sum()),
+        "sum_5d_net_shares": int(
+            primary["foreign_net_shares"].tail(5).sum()
+        ),
+        "sum_20d_net_shares": int(
+            primary["foreign_net_shares"].tail(20).sum()
+        ),
         "latest_holding_ratio_pct": _json_float(
             latest.get("foreign_holding_ratio_pct")
         ),
         "holding_ratio_change_pp": ratio_change,
+        "venues": venues,
+        "latest_component_ok": latest_component_ok,
         "value_basis": "shares",
-        "expected_update_beijing": "17:40",
+        "expected_update_beijing": "19:30",
         "series": {
             "dates": [d.strftime("%y/%m/%d") for d in chart_df["date"]],
             "net_shares": [int(v) for v in chart_df["foreign_net_shares"]],
+            "krx_net_shares": align_market("KRX", chart_df["date"]),
+            "nxt_net_shares": align_market("NXT", chart_df["date"]),
             "holding_ratio_pct": [
                 _json_float(v) for v in chart_df["foreign_holding_ratio_pct"]
             ],
         },
-        "recent": [
-            {
-                "date": row["date"].strftime("%m-%d"),
-                "foreign_net_shares": int(row["foreign_net_shares"]),
-                "institution_net_shares": int_or_none(row, "institution_net_shares"),
-                "holding_ratio_pct": _json_float(
-                    row.get("foreign_holding_ratio_pct")
-                ),
-                "close_krw": int_or_none(row, "close_krw"),
-            }
-            for _, row in recent_df.iterrows()
-        ],
+        "recent": [recent_record(row) for _, row in recent_df.iterrows()],
     }
 
 

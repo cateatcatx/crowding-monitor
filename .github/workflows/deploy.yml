@@ -7,10 +7,10 @@ on:
   push:
     branches: [main]
   # 定时(UTC): 01:00 = 北京09:00(美股收盘后);
-  # 09:40 = 北京17:40(KRX第二批日终投资者数据落地后)
+  # 11:30 = 北京19:30(NXT 20:00 KST收盘后留出数据落地缓冲)
   schedule:
     - cron: "0 1 * * *"
-    - cron: "40 9 * * 1-5"
+    - cron: "30 11 * * 1-5"
 
 permissions:
   contents: read
@@ -36,9 +36,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/SK_HYNIX_FOREIGN_FLOW.csv
-          key: foreign-flow-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: foreign-flow-v2-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            foreign-flow-v1-${{ runner.os }}-
+            foreign-flow-v2-${{ runner.os }}-
 
       - uses: actions/setup-python@v5
         with:
@@ -54,7 +54,7 @@ jobs:
       - name: Build static site
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "40 9 * * 1-5" ]]; then
+          if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "30 11 * * 1-5" ]]; then
             python -X utf8 build_static.py --strict-flow-freshness
           else
             python -X utf8 build_static.py

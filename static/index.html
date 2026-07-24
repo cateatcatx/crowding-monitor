@@ -156,27 +156,48 @@ function fmtFlowPct(v) {
   const n = finiteNumber(v);
   return n === null ? "—" : n.toFixed(2) + "%";
 }
-function renderRecentFlowRow(raw) {
+function renderRecentFlowRow(raw, combined) {
   const r = raw && typeof raw === "object" ? raw : {};
-  const close = finiteNumber(r.close_krw);
+  if (!combined) {
+    const close = finiteNumber(r.close_krw);
+    return `<tr>
+      <td>${escapeHtml(r.date || "—")}</td>
+      <td class="${flowClass(r.foreign_net_shares)}">${fmtSignedShares(r.foreign_net_shares)}</td>
+      <td class="${flowClass(r.institution_net_shares)}">${fmtSignedShares(r.institution_net_shares)}</td>
+      <td>${fmtFlowPct(r.holding_ratio_pct)}</td>
+      <td>₩${close === null ? "—" : close.toLocaleString("en-US")}</td>
+    </tr>`;
+  }
+  const total = r.total_net_shares ?? r.foreign_net_shares;
   return `<tr>
     <td>${escapeHtml(r.date || "—")}</td>
-    <td class="${flowClass(r.foreign_net_shares)}">${fmtSignedShares(r.foreign_net_shares)}</td>
-    <td class="${flowClass(r.institution_net_shares)}">${fmtSignedShares(r.institution_net_shares)}</td>
+    <td class="${flowClass(total)}">${fmtSignedShares(total)}</td>
+    <td class="${flowClass(r.krx_net_shares)}">${fmtSignedShares(r.krx_net_shares)}</td>
+    <td class="${flowClass(r.nxt_net_shares)}">${fmtSignedShares(r.nxt_net_shares)}</td>
     <td>${fmtFlowPct(r.holding_ratio_pct)}</td>
-    <td>₩${close === null ? "—" : close.toLocaleString("en-US")}</td>
   </tr>`;
+}
+function flowVenueText(venues, field) {
+  const krx = venues && venues.KRX && typeof venues.KRX === "object"
+    ? venues.KRX[field] : null;
+  const nxt = venues && venues.NXT && typeof venues.NXT === "object"
+    ? venues.NXT[field] : null;
+  return `KRX ${fmtSignedShares(krx)} · NXT ${fmtSignedShares(nxt)}`;
 }
 function renderForeignFlowPanel(f) {
   if (!f || typeof f !== "object") return "";
   const recent = Array.isArray(f.recent) ? f.recent : [];
+  const venues = f.venues && typeof f.venues === "object" ? f.venues :
+    (f.breakdown && typeof f.breakdown === "object" ? f.breakdown : {});
+  const combined = String(f.market || "").toUpperCase() === "ALL";
   const ratioChange = finiteNumber(f.holding_ratio_change_pp);
   const ratioChangeText = ratioChange === null ? "较前日 —" :
     `较前日 ${ratioChange > 0 ? "+" : ""}${ratioChange.toFixed(2)}个百分点`;
-  const market = escapeHtml(f.market || "KRX");
+  const market = escapeHtml(f.market_label ||
+    (combined ? "全市场（KRX+NXT）" : f.market || "KRX"));
   const asof = escapeHtml(f.asof || "—");
   const quoteAsOf = escapeHtml(f.quote_asof || "当日");
-  const updateTime = escapeHtml(f.expected_update_beijing || "17:40");
+  const updateTime = escapeHtml(f.expected_update_beijing || "19:30");
   const source = escapeHtml(f.source || "Naver Finance");
   const sourceUrl = safeHttpsUrl(f.source_url);
   const latestNet = finiteNumber(f.latest_net_shares);
@@ -185,10 +206,29 @@ function renderForeignFlowPanel(f) {
   const status = f.stale
     ? `<span class="flow-status bg-yellow">等待 ${quoteAsOf} 日终数据</span>`
     : '<span class="flow-status bg-green">已更新</span>';
+  const componentStatus = !combined ? "" :
+    (f.latest_component_ok
+      ? '<span class="flow-status bg-green">ALL=KRX+NXT 已核验</span>'
+      : '<span class="flow-status bg-yellow">分市场数据待核验</span>');
+  const scopeText = combined
+    ? "主指标为 ALL 全市场合计，分项为 KRX 与 NXT"
+    : "当前为 KRX 单市场口径";
+  const latestSub = combined
+    ? flowVenueText(venues, "latest_net_shares")
+    : asof;
+  const sum5Sub = combined
+    ? flowVenueText(venues, "sum_5d_net_shares")
+    : "观察短线外资方向";
+  const sum20Sub = combined
+    ? flowVenueText(venues, "sum_20d_net_shares")
+    : "约一个交易月";
+  const detailHeader = combined
+    ? "<tr><th>日期</th><th>ALL 合计</th><th>KRX</th><th>NXT</th><th>外资持股比例</th></tr>"
+    : "<tr><th>日期</th><th>外资净买卖</th><th>机构净买卖</th><th>外资持股比例</th><th>收盘价</th></tr>";
   return `
   <div class="panel">
-    <h2>SK海力士外资流向（${market}）${status}</h2>
-    <div class="sub">截至 ${asof} · 正值=外资净买入，负值=外资净卖出 · 日终股数口径，不等同精确韩元资金流 ·
+    <h2>SK海力士外资流向（${market}）${status}${componentStatus}</h2>
+    <div class="sub">截至 ${asof} · ${scopeText} · 正值=外资净买入，负值=外资净卖出 · 日终股数口径，不等同精确韩元资金流 ·
       通常北京时间 ${updateTime} 后更新 ·
       <a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener">数据源：${source}</a>
     </div>
@@ -196,17 +236,17 @@ function renderForeignFlowPanel(f) {
       <div class="flow-kpi">
         <div class="k">最新交易日净买卖</div>
         <div class="v ${flowClass(latestNet)}">${fmtSignedShares(latestNet)}</div>
-        <div class="s">${asof}</div>
+        <div class="s">${latestSub}</div>
       </div>
       <div class="flow-kpi">
         <div class="k">近 5 个交易日累计</div>
         <div class="v ${flowClass(sum5)}">${fmtSignedShares(sum5)}</div>
-        <div class="s">观察短线外资方向</div>
+        <div class="s">${sum5Sub}</div>
       </div>
       <div class="flow-kpi">
         <div class="k">近 20 个交易日累计</div>
         <div class="v ${flowClass(sum20)}">${fmtSignedShares(sum20)}</div>
-        <div class="s">约一个交易月</div>
+        <div class="s">${sum20Sub}</div>
       </div>
       <div class="flow-kpi">
         <div class="k">外资持股比例</div>
@@ -218,8 +258,8 @@ function renderForeignFlowPanel(f) {
     ${recent.length ? `<details class="flow-details">
       <summary>查看最近 10 个交易日明细</summary>
       <div style="overflow-x:auto"><table>
-        <tr><th>日期</th><th>外资净买卖</th><th>机构净买卖</th><th>外资持股比例</th><th>收盘价</th></tr>
-        ${recent.map(renderRecentFlowRow).join("")}
+        ${detailHeader}
+        ${recent.map(row => renderRecentFlowRow(row, combined)).join("")}
       </table></div>
     </details>` : ""}
   </div>`;
@@ -262,7 +302,7 @@ function render(d) {
   if (d.last_error) { banner.textContent = "提示: " + d.last_error; banner.className = "banner warn"; }
   else banner.className = "banner";
   if (IS_STATIC) {
-    meta.textContent = `数据生成于 ${d.generated_at} (UTC) · 每交易日自动更新两次(约北京时间 09:00 / 17:40)`;
+    meta.textContent = `数据生成于 ${d.generated_at} (UTC) · 每交易日自动更新两次(约北京时间 09:00 / 19:30)`;
     btn.textContent = "刷新页面"; btn.disabled = false;
   } else {
     const age = (d.data_age_min == null) ? "" :
@@ -465,7 +505,8 @@ function drawForeignFlow(f) {
       labels: dates,
       datasets: [
         {
-          label: "外资净买卖",
+          label: String(f.market || "").toUpperCase() === "ALL"
+            ? "外资净买卖（ALL）" : "外资净买卖",
           data: net,
           backgroundColor: barColors,
           borderWidth: 0,

@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""抓取 SK 海力士（KRX: 000660）每日外资净买卖数据。
+"""抓取 SK 海力士（000660）每日外资净买卖数据。
 
-数据来自 Naver Finance 的 KRX 投资者趋势接口。正数表示外资净买入，
-负数表示外资净卖出。该数据是股数口径，不是精确的韩元资金流。
+数据来自 Naver Finance 的投资者趋势接口，同时保存 ALL（KRX+NXT）、
+KRX、NXT 三种口径。正数表示外资净买入，负数表示外资净卖出。
+该数据是股数口径，不是精确的韩元资金流。
 
 输出:
     data/SK_HYNIX_FOREIGN_FLOW.csv
@@ -22,11 +23,9 @@ import requests
 HERE = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = HERE / "data" / "SK_HYNIX_FOREIGN_FLOW.csv"
 DEFAULT_START = date(2025, 1, 1)
+SK_HYNIX_NXT_START_DATE = date(2025, 3, 24)
 API_URL = "https://m.stock.naver.com/front-api/stock/domestic/trend"
-SOURCE_URL = (
-    "https://m.stock.naver.com/domestic/stock/000660/"
-    "tradingTrend?marketType=KRX"
-)
+MARKETS = ("ALL", "KRX", "NXT")
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -48,6 +47,13 @@ OUTPUT_COLUMNS = [
     "source",
     "source_url",
 ]
+
+
+def source_url(market: str) -> str:
+    return (
+        "https://m.stock.naver.com/domestic/stock/000660/"
+        f"tradingTrend?marketType={market}"
+    )
 
 
 def parse_int(value) -> int | None:
@@ -72,7 +78,7 @@ def parse_pct(value) -> float | None:
     return float(text)
 
 
-def normalize_record(raw: dict) -> dict:
+def normalize_record(raw: dict, market: str = "KRX") -> dict:
     """规范一条 Naver 返回记录，字段名和单位在此处固定。"""
     bizdate = str(raw.get("bizdate", ""))
     parsed_date = datetime.strptime(bizdate, "%Y%m%d").date()
@@ -82,7 +88,7 @@ def normalize_record(raw: dict) -> dict:
     return {
         "date": parsed_date.isoformat(),
         "ticker": "000660",
-        "market": "KRX",
+        "market": market,
         "foreign_net_shares": net_shares,
         "institution_net_shares": parse_int(raw.get("organPureBuyQuant")),
         "individual_net_shares": parse_int(raw.get("individualPureBuyQuant")),
@@ -90,18 +96,21 @@ def normalize_record(raw: dict) -> dict:
         "close_krw": parse_int(raw.get("closePrice")),
         "volume_shares": parse_int(raw.get("accumulatedTradingVolume")),
         "source": "Naver Finance",
-        "source_url": SOURCE_URL,
+        "source_url": source_url(market),
     }
 
 
 def fetch_since(
     start: date,
     *,
+    market: str = "KRX",
     timeout: float = 20,
     sleep_seconds: float = 0.15,
     max_pages: int = 20,
 ) -> pd.DataFrame:
     """分页抓取 start（含）之后的数据；bizdate 是排他性翻页游标。"""
+    if market not in MARKETS:
+        raise ValueError(f"不支持的市场口径: {market}")
     rows: list[dict] = []
     cursor: str | None = None
 
@@ -110,7 +119,7 @@ def fetch_since(
         for _ in range(max_pages):
             params = {
                 "code": "000660",
-                "marketType": "KRX",
+                "marketType": market,
                 "pageSize": 50,
             }
             if cursor:
@@ -126,7 +135,7 @@ def fetch_since(
             if not batch:
                 break
 
-            normalized = [normalize_record(item) for item in batch]
+            normalized = [normalize_record(item, market) for item in batch]
             rows.extend(normalized)
             oldest = min(datetime.strptime(r["date"], "%Y-%m-%d").date()
                          for r in normalized)
@@ -140,10 +149,12 @@ def fetch_since(
             if sleep_seconds:
                 time.sleep(sleep_seconds)
         else:
-            raise RuntimeError(f"达到分页上限 {max_pages}，请增大 --max-pages")
+            raise RuntimeError(
+                f"{market}达到分页上限 {max_pages}，请增大 --max-pages"
+            )
 
     if not rows:
-        raise RuntimeError("Naver 没有返回外资流向数据")
+        raise RuntimeError(f"Naver 没有返回 {market} 外资流向数据")
 
     result = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     result["date"] = pd.to_datetime(result["date"])
@@ -172,24 +183,121 @@ def latest_reference_date(path: Path) -> date | None:
     return dates.max().date() if not dates.empty else None
 
 
-def validate_freshness(frame: pd.DataFrame, expected_date: date | None) -> date:
-    latest_date = pd.to_datetime(frame["date"], errors="raise").max().date()
+def validate_freshness(
+    frame: pd.DataFrame,
+    expected_date: date | None,
+    market: str = "ALL",
+) -> date:
+    selected = frame[frame["market"] == market]
+    if selected.empty:
+        raise RuntimeError(f"缺少 {market} 外资流向数据")
+    latest_date = pd.to_datetime(selected["date"], errors="raise").max().date()
     if expected_date and latest_date < expected_date:
         raise RuntimeError(
-            f"外资流向最新{latest_date:%Y-%m-%d}，"
+            f"{market}外资流向最新{latest_date:%Y-%m-%d}，"
             f"落后于价格交易日{expected_date:%Y-%m-%d}"
         )
     return latest_date
 
 
-def save_merged(fetched: pd.DataFrame, output: Path, start: date) -> pd.DataFrame:
+def validate_market_consistency(frame: pd.DataFrame) -> None:
+    """验证三种口径同步，且共同交易日满足 ALL = KRX + NXT。"""
+    duplicate_keys = frame.duplicated(["date", "market"], keep=False)
+    if duplicate_keys.any():
+        raise RuntimeError("外资流向存在重复的(date, market)记录")
+
+    pivot = frame.pivot_table(
+        index="date",
+        columns="market",
+        values="foreign_net_shares",
+        aggfunc="last",
+    )
+    required = {"ALL", "KRX", "NXT"}
+    if not required.issubset(pivot.columns):
+        raise RuntimeError("外资流向缺少 ALL/KRX/NXT 市场分项")
+
+    latest_dates = {
+        market: pd.to_datetime(
+            frame.loc[frame["market"] == market, "date"], errors="raise"
+        ).max()
+        for market in MARKETS
+    }
+    if any(pd.isna(value) for value in latest_dates.values()):
+        raise RuntimeError("外资流向缺少 ALL/KRX/NXT 市场分项")
+    if len(set(latest_dates.values())) != 1:
+        detail = "、".join(
+            f"{market}={value:%Y-%m-%d}"
+            for market, value in latest_dates.items()
+        )
+        raise RuntimeError(f"ALL/KRX/NXT 最新日期不一致: {detail}")
+
+    pivot_dates = pd.to_datetime(pivot.index)
+    nxt_start = pd.Timestamp(SK_HYNIX_NXT_START_DATE)
+    nxt_dates = pd.to_datetime(
+        frame.loc[frame["market"] == "NXT", "date"], errors="raise"
+    )
+    if (nxt_dates < nxt_start).any():
+        raise RuntimeError("SK海力士在2025-03-24前不应存在NXT记录")
+
+    before_nxt = pivot.loc[pivot_dates < nxt_start]
+    incomplete_before_nxt = before_nxt[["ALL", "KRX"]].isna().any(axis=1)
+    if incomplete_before_nxt.any():
+        sample = pd.Timestamp(
+            incomplete_before_nxt[incomplete_before_nxt].index[-1]
+        ).strftime("%Y-%m-%d")
+        raise RuntimeError(f"{sample} 缺少 ALL/KRX 市场口径")
+    pre_nxt_mismatches = before_nxt[
+        before_nxt["ALL"].astype("int64")
+        != before_nxt["KRX"].astype("int64")
+    ]
+    if not pre_nxt_mismatches.empty:
+        sample = pd.Timestamp(pre_nxt_mismatches.index[-1]).strftime(
+            "%Y-%m-%d"
+        )
+        raise RuntimeError(f"{sample} NXT上线前不满足 ALL=KRX")
+
+    if not before_nxt.empty:
+        launch_rows = pivot.loc[pivot_dates == nxt_start, list(MARKETS)]
+        if launch_rows.empty or launch_rows.isna().to_numpy().any():
+            raise RuntimeError("跨越NXT纳入日期的历史缺少2025-03-24边界记录")
+
+    active_nxt = pivot.loc[pivot_dates >= nxt_start]
+    incomplete = active_nxt[list(MARKETS)].isna().any(axis=1)
+    if incomplete.any():
+        sample = pd.Timestamp(incomplete[incomplete].index[-1]).strftime(
+            "%Y-%m-%d"
+        )
+        raise RuntimeError(f"{sample} 缺少 ALL/KRX/NXT 中的市场分项")
+
+    common = pivot.dropna(subset=["ALL", "KRX", "NXT"])
+    if common.empty:
+        raise RuntimeError("ALL/KRX/NXT 没有可核验的共同交易日")
+    mismatches = common[
+        common["ALL"].astype("int64")
+        != common["KRX"].astype("int64") + common["NXT"].astype("int64")
+    ]
+    if not mismatches.empty:
+        sample = pd.Timestamp(mismatches.index[-1]).strftime("%Y-%m-%d")
+        raise RuntimeError(f"{sample} 外资净买卖不满足 ALL=KRX+NXT")
+
+
+def merge_with_existing(
+    fetched: pd.DataFrame,
+    output: Path,
+    start: date,
+) -> pd.DataFrame:
+    """在内存中合并历史；验证完成前不修改磁盘文件。"""
     existing = load_existing(output)
     combined = fetched.copy() if existing.empty else pd.concat(
         [existing, fetched], ignore_index=True
     )
     combined["date"] = pd.to_datetime(combined["date"], errors="raise")
     combined = combined[combined["date"].dt.date >= start]
-    combined = combined.sort_values("date").drop_duplicates("date", keep="last")
+    combined = (
+        combined.drop_duplicates(["date", "market"], keep="last")
+        .sort_values(["date", "market"])
+        .reset_index(drop=True)
+    )
 
     for column in [
         "foreign_net_shares",
@@ -202,13 +310,24 @@ def save_merged(fetched: pd.DataFrame, output: Path, start: date) -> pd.DataFram
     combined["foreign_holding_ratio_pct"] = pd.to_numeric(
         combined["foreign_holding_ratio_pct"], errors="coerce"
     )
+    return combined
 
+
+def write_atomic(frame: pd.DataFrame, output: Path) -> None:
+    """只把已经通过校验的数据原子写入目标 CSV。"""
     output.parent.mkdir(parents=True, exist_ok=True)
     temp_output = output.with_suffix(output.suffix + ".tmp")
-    combined.to_csv(temp_output, index=False, date_format="%Y-%m-%d",
-                    columns=OUTPUT_COLUMNS)
-    os.replace(temp_output, output)
-    return combined
+    try:
+        frame.to_csv(
+            temp_output,
+            index=False,
+            date_format="%Y-%m-%d",
+            columns=OUTPUT_COLUMNS,
+        )
+        os.replace(temp_output, output)
+    finally:
+        if temp_output.exists():
+            temp_output.unlink()
 
 
 def parse_iso_date(value: str) -> date:
@@ -219,7 +338,9 @@ def parse_iso_date(value: str) -> date:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="抓取 SK 海力士 KRX 外资每日净买卖")
+    parser = argparse.ArgumentParser(
+        description="抓取 SK 海力士 ALL/KRX/NXT 外资每日净买卖"
+    )
     parser.add_argument("--start", type=parse_iso_date, default=DEFAULT_START)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--timeout", type=float, default=20)
@@ -255,14 +376,25 @@ def main() -> int:
     combined = None
     for attempt in range(1, args.max_attempts + 1):
         try:
-            fetched = fetch_since(
-                fetch_start,
-                timeout=args.timeout,
-                sleep_seconds=args.sleep,
-                max_pages=args.max_pages,
+            fetched = pd.concat(
+                [
+                    fetch_since(
+                        fetch_start,
+                        market=market,
+                        timeout=args.timeout,
+                        sleep_seconds=args.sleep,
+                        max_pages=args.max_pages,
+                    )
+                    for market in MARKETS
+                ],
+                ignore_index=True,
             )
-            combined = save_merged(fetched, args.output, args.start)
-            validate_freshness(combined, expected_date)
+            candidate = merge_with_existing(fetched, args.output, args.start)
+            validate_market_consistency(candidate)
+            for market in MARKETS:
+                validate_freshness(candidate, expected_date, market=market)
+            write_atomic(candidate, args.output)
+            combined = candidate
             break
         except Exception as exc:
             if attempt >= args.max_attempts:
@@ -277,10 +409,11 @@ def main() -> int:
     if combined is None:
         raise RuntimeError("外资流向抓取没有生成数据")
 
-    latest = combined.iloc[-1]
-    total_5 = int(combined["foreign_net_shares"].tail(5).sum())
+    all_market = combined[combined["market"] == "ALL"].sort_values("date")
+    latest = all_market.iloc[-1]
+    total_5 = int(all_market["foreign_net_shares"].tail(5).sum())
     print(
-        f"SK海力士外资流向: {len(combined)}行, "
+        f"SK海力士外资流向: {len(combined)}行(ALL/KRX/NXT), "
         f"最新{latest['date']:%Y-%m-%d} "
         f"{int(latest['foreign_net_shares']):+d}股, "
         f"近5日{total_5:+d}股 -> {args.output}"
