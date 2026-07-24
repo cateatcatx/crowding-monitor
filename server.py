@@ -22,6 +22,7 @@ from flask import Flask, jsonify, send_from_directory
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")
+FOREIGN_FLOW_FILE = os.path.join(HERE, "data", "SK_HYNIX_FOREIGN_FLOW.csv")
 PORT = 5690
 
 TARGETS = [
@@ -60,13 +61,19 @@ def refresh_pipeline():
     _state["refreshing"] = True
     _state["last_error"] = None
     try:
+        warnings = []
         _run("fetch_data.py")
+        try:
+            _run("fetch_sk_hynix_foreign_flow.py", "--skip-freshness-check")
+        except Exception as e:  # 补充数据失败时沿用种子CSV
+            warnings.append(f"SK海力士外资流向失败(已沿用上次数据): {e}")
         _run("crowding_engine.py")
         _run("theme_index.py")
         try:
             _run("options_snapshot.py", "MU", "SNDK", "WDC")
         except Exception as e:  # 期权源偶发失败不影响主数据
-            _state["last_error"] = f"期权快照失败(主数据正常): {e}"
+            warnings.append(f"期权快照失败(主数据正常): {e}")
+        _state["last_error"] = "; ".join(warnings) if warnings else None
         _state["last_refresh"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e:
         _state["last_error"] = str(e)
@@ -120,6 +127,111 @@ def tci_status(v):
     if v >= 55:
         return "yellow"
     return "green"
+
+
+def _json_float(value, digits=2):
+    return round(float(value), digits) if pd.notna(value) else None
+
+
+def assemble_foreign_flow(quote_asof=None):
+    """组装 SK 海力士 KRX 外资净买卖摘要和每日序列。"""
+    if not os.path.exists(FOREIGN_FLOW_FILE):
+        return None
+
+    df = pd.read_csv(FOREIGN_FLOW_FILE, dtype={"ticker": str})
+    required = {
+        "date",
+        "foreign_net_shares",
+        "foreign_holding_ratio_pct",
+    }
+    if not required.issubset(df.columns):
+        return None
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    for column in [
+        "foreign_net_shares",
+        "institution_net_shares",
+        "individual_net_shares",
+        "foreign_holding_ratio_pct",
+        "close_krw",
+        "volume_shares",
+    ]:
+        if column in df:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+    df = (
+        df.dropna(subset=["date", "foreign_net_shares"])
+        .sort_values("date")
+        .drop_duplicates("date", keep="last")
+    )
+    if df.empty:
+        return None
+
+    latest = df.iloc[-1]
+    ratio_change = None
+    if (
+        len(df) >= 2
+        and pd.notna(latest.get("foreign_holding_ratio_pct"))
+        and pd.notna(df.iloc[-2].get("foreign_holding_ratio_pct"))
+    ):
+        ratio_change = round(float(
+            latest["foreign_holding_ratio_pct"]
+            - df.iloc[-2]["foreign_holding_ratio_pct"]
+        ), 2)
+
+    chart_df = df.tail(90)
+    recent_df = df.tail(10).iloc[::-1]
+    quote_date = pd.to_datetime(quote_asof, errors="coerce") if quote_asof else pd.NaT
+    stale = bool(pd.notna(quote_date) and latest["date"].normalize() < quote_date.normalize())
+
+    def int_or_none(row, column):
+        value = row.get(column)
+        return int(value) if pd.notna(value) else None
+
+    return {
+        "ticker": str(latest.get("ticker", "000660")).zfill(6),
+        "label": "SK海力士",
+        "market": str(latest.get("market", "KRX")),
+        "source": str(latest.get("source", "Naver Finance")),
+        "source_url": str(latest.get(
+            "source_url",
+            "https://m.stock.naver.com/domestic/stock/000660/"
+            "tradingTrend?marketType=KRX",
+        )),
+        "asof": latest["date"].strftime("%Y-%m-%d"),
+        "quote_asof": quote_date.strftime("%Y-%m-%d") if pd.notna(quote_date) else None,
+        "stale": stale,
+        "latest_net_shares": int(latest["foreign_net_shares"]),
+        "latest_direction": "inflow" if latest["foreign_net_shares"] > 0 else (
+            "outflow" if latest["foreign_net_shares"] < 0 else "flat"
+        ),
+        "sum_5d_net_shares": int(df["foreign_net_shares"].tail(5).sum()),
+        "sum_20d_net_shares": int(df["foreign_net_shares"].tail(20).sum()),
+        "latest_holding_ratio_pct": _json_float(
+            latest.get("foreign_holding_ratio_pct")
+        ),
+        "holding_ratio_change_pp": ratio_change,
+        "value_basis": "shares",
+        "expected_update_beijing": "17:40",
+        "series": {
+            "dates": [d.strftime("%y/%m/%d") for d in chart_df["date"]],
+            "net_shares": [int(v) for v in chart_df["foreign_net_shares"]],
+            "holding_ratio_pct": [
+                _json_float(v) for v in chart_df["foreign_holding_ratio_pct"]
+            ],
+        },
+        "recent": [
+            {
+                "date": row["date"].strftime("%m-%d"),
+                "foreign_net_shares": int(row["foreign_net_shares"]),
+                "institution_net_shares": int_or_none(row, "institution_net_shares"),
+                "holding_ratio_pct": _json_float(
+                    row.get("foreign_holding_ratio_pct")
+                ),
+                "close_krw": int_or_none(row, "close_krw"),
+            }
+            for _, row in recent_df.iterrows()
+        ],
+    }
 
 
 def assemble_dashboard():
@@ -242,6 +354,8 @@ def assemble_dashboard():
     n_red = sum(1 for s in stocks if s["status"] == "red")
     n_triggered = sum(1 for s in stocks if s["triggered"])
     breadth_n = sum(1 for s in stocks if (s["score"] or 0) >= 80)
+    sk_hynix = next((s for s in stocks if s["key"] == "SK_HYNIX"), None)
+    foreign_flow = assemble_foreign_flow(sk_hynix["date"] if sk_hynix else None)
 
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -256,6 +370,7 @@ def assemble_dashboard():
         "vol_pct_chart": vol_pct_chart,
         "vol_pct_now": vol_pct_now,
         "options": options,
+        "foreign_flow": foreign_flow,
         "summary": {"n_red": n_red, "n_triggered": n_triggered, "breadth": breadth_n},
     }
 

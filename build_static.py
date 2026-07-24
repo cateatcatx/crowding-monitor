@@ -2,7 +2,8 @@
 """把拥挤度看板构建成静态站点(用于 GitHub Pages)。
 
 流程:
-  1. 跑数据管线: fetch_data -> crowding_engine -> theme_index -> options_snapshot
+  1. 跑数据管线: fetch_data + SK海力士外资流向
+     -> crowding_engine -> theme_index -> options_snapshot
      - fetch / options 为"尽力而为": 失败时用仓库里已有的 CSV(种子数据)继续构建, 并在页面顶部提示
      - engine / theme_index 为必需步骤, 失败则退出非零(避免部署坏页面)
   2. 复用 server.assemble_dashboard() 组装 dashboard.json
@@ -44,6 +45,11 @@ def run(script, *args, required=False, timeout=900):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-fetch", action="store_true", help="跳过数据抓取, 用现有CSV")
+    ap.add_argument(
+        "--strict-flow-freshness",
+        action="store_true",
+        help="要求外资流向日期追上SK海力士价格日期，并在未落地时重试",
+    )
     args = ap.parse_args()
 
     notes = []
@@ -51,6 +57,14 @@ def main():
         n = run("fetch_data.py")
         if n:
             notes.append("部分行情抓取失败, 已使用上次数据: " + n[:140])
+        flow_args = (
+            ["--max-attempts", "4", "--retry-delay", "120"]
+            if args.strict_flow_freshness
+            else ["--skip-freshness-check"]
+        )
+        n = run("fetch_sk_hynix_foreign_flow.py", *flow_args, timeout=900)
+        if n:
+            notes.append("SK海力士外资流向抓取失败, 已使用上次数据: " + n[:140])
 
     # 必需步骤: 用现有(或刚抓取的)CSV 计算分数与总指数
     run("crowding_engine.py", required=True)

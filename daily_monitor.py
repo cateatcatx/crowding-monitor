@@ -49,6 +49,15 @@ def main():
     if not args.no_fetch:
         print(">>> 拉取最新日线 ...")
         subprocess.run([py, os.path.join(HERE, "fetch_data.py")], check=False)
+        print(">>> 拉取SK海力士外资流向 ...")
+        subprocess.run(
+            [
+                py,
+                os.path.join(HERE, "fetch_sk_hynix_foreign_flow.py"),
+                "--skip-freshness-check",
+            ],
+            check=False,
+        )
     print(">>> 计算拥挤度 ...")
     subprocess.run([py, os.path.join(HERE, "crowding_engine.py")],
                    check=True, stdout=subprocess.DEVNULL)

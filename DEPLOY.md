@@ -7,7 +7,7 @@
 ## 原理
 
 - `build_static.py` 在 GitHub 的服务器上跑数据管线(拉新浪/Naver/CBOE → 算分 → 生成 `dashboard.json`), 连同网页一起发布到 GitHub Pages。
-- `.github/workflows/deploy.yml` 定时触发(北京时间约 09:00 / 15:00), 也可在网页上手动触发。
+- `.github/workflows/deploy.yml` 定时触发(北京时间约 09:00 / 17:40), 也可在网页上手动触发。第二次更新安排在KRX第二批日终投资者数据落地后。
 - 页面前端优先读构建好的 `dashboard.json`(静态); 在你本机用 `server.py` 打开时仍走实时接口, 两种模式同一份 `index.html`。
 
 ## 一次性设置(约 5 分钟)
@@ -38,13 +38,13 @@ git push -u origin main
 
 ## 日常
 
-- 什么都不用做: 每交易日 09:00 / 15:00(北京)自动重建并更新数据。
+- 什么都不用做: 每交易日约 09:00 / 17:40(北京)自动重建并更新数据。
 - 想立即更新: Actions 页面点 "Run workflow"; 或本机运行 `python build_static.py` 后 `git commit`/`push`(会触发重建)。
 - 网页上的"刷新页面"按钮只是重新加载当前已发布的数据。
 
 ## 说明与局限
 
-- 数据源(新浪美股 / Naver 韩股 / CBOE 期权)在 GitHub 美国服务器上抓取。若某源临时不可达, 构建会**自动回退到仓库里上次的数据**, 并在页面顶部显示提示 —— 不会中断发布。
+- 数据源(新浪美股 / Naver 韩股 / CBOE 期权)在 GitHub 美国服务器上抓取。SK海力士外资历史会通过 Actions 缓存保留最近一次成功结果; 若缓存不可用, 再回退到仓库种子数据。页面顶部会显示抓取提示, 不会中断主看板发布。
 - 因此建议保留 `data/*.csv`、`out/*.csv`、`out/options_snapshot.json` 作为种子数据(已在 git 跟踪中)。
 - 免费版 Pages 要求仓库公开; 本项目不含任何密钥或账号信息。
 - 本地预览静态版: `python build_static.py --no-fetch` 后, `cd site && python -m http.server 8080`, 浏览器开 http://127.0.0.1:8080/ 。
