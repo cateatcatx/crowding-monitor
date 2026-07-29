@@ -1,77 +1,77 @@
 [
   {
     "ticker": "MU",
-    "spot": 821.67,
-    "asof": "2026-07-29 21:25",
+    "spot": 817.5,
+    "asof": "2026-07-29 21:30",
     "total_oi": 3459590.0,
     "total_volume": 736584.0,
     "pc_ratio_oi": 1.241,
     "pc_ratio_vol": 0.867,
-    "near_atm_iv_pct": 101.4,
+    "near_atm_iv_pct": 101.6,
     "near_call25d_iv_pct": 97.8,
     "near_put25d_iv_pct": 107.4,
     "skew_call_minus_put_pct": -9.59,
-    "near_otm_call_oi_share_pct": 12.6,
+    "near_otm_call_oi_share_pct": 12.7,
     "term_structure": [
       {
         "exp": "2026-07-31",
         "dte": 2,
-        "iv_pct": 127.8
+        "iv_pct": 128.2
       },
       {
         "exp": "2026-08-03",
         "dte": 5,
-        "iv_pct": 104.4
+        "iv_pct": 104.6
       },
       {
         "exp": "2026-08-05",
         "dte": 7,
-        "iv_pct": 105.4
+        "iv_pct": 105.7
       },
       {
         "exp": "2026-08-07",
         "dte": 9,
-        "iv_pct": 110.5
+        "iv_pct": 110.8
       },
       {
         "exp": "2026-08-10",
         "dte": 12,
-        "iv_pct": 101.7
+        "iv_pct": 101.9
       },
       {
         "exp": "2026-08-12",
         "dte": 14,
-        "iv_pct": 101.7
+        "iv_pct": 101.8
       },
       {
         "exp": "2026-08-14",
         "dte": 16,
-        "iv_pct": 102.5
+        "iv_pct": 102.8
       },
       {
         "exp": "2026-08-21",
         "dte": 23,
-        "iv_pct": 98.3
+        "iv_pct": 98.5
       },
       {
         "exp": "2026-08-28",
         "dte": 30,
-        "iv_pct": 96.2
+        "iv_pct": 96.4
       },
       {
         "exp": "2026-09-04",
         "dte": 37,
-        "iv_pct": 94.4
+        "iv_pct": 94.5
       },
       {
         "exp": "2026-09-18",
         "dte": 51,
-        "iv_pct": 91.1
+        "iv_pct": 91.3
       },
       {
         "exp": "2026-10-16",
         "dte": 79,
-        "iv_pct": 91.2
+        "iv_pct": 91.4
       },
       {
         "exp": "2026-11-20",
@@ -81,95 +81,95 @@
       {
         "exp": "2026-12-18",
         "dte": 142,
-        "iv_pct": 87.3
+        "iv_pct": 87.4
       },
       {
         "exp": "2027-01-15",
         "dte": 170,
-        "iv_pct": 87.0
+        "iv_pct": 87.1
       }
     ]
   },
   {
     "ticker": "SNDK",
-    "spot": 1096.1897,
-    "asof": "2026-07-29 21:25",
+    "spot": 1085.28,
+    "asof": "2026-07-29 21:30",
     "total_oi": 924026.0,
     "total_volume": 225855.0,
     "pc_ratio_oi": 1.255,
     "pc_ratio_vol": 1.017,
-    "near_atm_iv_pct": 152.8,
+    "near_atm_iv_pct": 153.1,
     "near_call25d_iv_pct": 144.2,
     "near_put25d_iv_pct": 160.8,
     "skew_call_minus_put_pct": -16.66,
-    "near_otm_call_oi_share_pct": 20.5,
+    "near_otm_call_oi_share_pct": 20.6,
     "term_structure": [
       {
         "exp": "2026-07-31",
         "dte": 2,
-        "iv_pct": 183.5
+        "iv_pct": 184.3
       },
       {
         "exp": "2026-08-07",
         "dte": 9,
-        "iv_pct": 177.6
+        "iv_pct": 178.0
       },
       {
         "exp": "2026-08-14",
         "dte": 16,
-        "iv_pct": 157.5
+        "iv_pct": 157.8
       },
       {
         "exp": "2026-08-21",
         "dte": 23,
-        "iv_pct": 146.7
+        "iv_pct": 147.1
       },
       {
         "exp": "2026-08-28",
         "dte": 30,
-        "iv_pct": 140.9
+        "iv_pct": 141.0
       },
       {
         "exp": "2026-09-04",
         "dte": 37,
-        "iv_pct": 135.9
+        "iv_pct": 136.0
       },
       {
         "exp": "2026-09-18",
         "dte": 51,
-        "iv_pct": 129.1
+        "iv_pct": 129.3
       },
       {
         "exp": "2026-10-16",
         "dte": 79,
-        "iv_pct": 123.9
+        "iv_pct": 124.1
       },
       {
         "exp": "2026-11-20",
         "dte": 114,
-        "iv_pct": 122.2
+        "iv_pct": 122.3
       },
       {
         "exp": "2026-12-18",
         "dte": 142,
-        "iv_pct": 119.0
+        "iv_pct": 119.1
       },
       {
         "exp": "2027-01-15",
         "dte": 170,
-        "iv_pct": 117.1
+        "iv_pct": 117.2
       }
     ]
   },
   {
     "ticker": "WDC",
-    "spot": 479.33,
-    "asof": "2026-07-29 21:25",
+    "spot": 478.7303,
+    "asof": "2026-07-29 21:30",
     "total_oi": 407040.0,
     "total_volume": 51380.0,
     "pc_ratio_oi": 1.507,
     "pc_ratio_vol": 1.623,
-    "near_atm_iv_pct": 117.5,
+    "near_atm_iv_pct": 117.4,
     "near_call25d_iv_pct": 112.1,
     "near_put25d_iv_pct": 125.0,
     "skew_call_minus_put_pct": -12.93,
@@ -178,32 +178,32 @@
       {
         "exp": "2026-07-31",
         "dte": 2,
-        "iv_pct": 159.5
+        "iv_pct": 159.8
       },
       {
         "exp": "2026-08-07",
         "dte": 9,
-        "iv_pct": 133.8
+        "iv_pct": 134.0
       },
       {
         "exp": "2026-08-14",
         "dte": 16,
-        "iv_pct": 118.3
+        "iv_pct": 118.5
       },
       {
         "exp": "2026-08-21",
         "dte": 23,
-        "iv_pct": 110.6
+        "iv_pct": 110.7
       },
       {
         "exp": "2026-08-28",
         "dte": 30,
-        "iv_pct": 106.8
+        "iv_pct": 106.9
       },
       {
         "exp": "2026-09-04",
         "dte": 37,
-        "iv_pct": 105.0
+        "iv_pct": 105.2
       },
       {
         "exp": "2026-09-18",
@@ -234,13 +234,13 @@
   },
   {
     "ticker": "SKHY",
-    "spot": 128.59,
-    "asof": "2026-07-29 21:25",
+    "spot": 127.58,
+    "asof": "2026-07-29 21:30",
     "total_oi": 772723.0,
     "total_volume": 217156.0,
     "pc_ratio_oi": 1.576,
     "pc_ratio_vol": 0.636,
-    "near_atm_iv_pct": 132.1,
+    "near_atm_iv_pct": 133.3,
     "near_call25d_iv_pct": 127.5,
     "near_put25d_iv_pct": 134.5,
     "skew_call_minus_put_pct": -7.0,
@@ -249,57 +249,57 @@
       {
         "exp": "2026-07-31",
         "dte": 2,
-        "iv_pct": 168.4
+        "iv_pct": 168.7
       },
       {
         "exp": "2026-08-07",
         "dte": 9,
-        "iv_pct": 138.6
+        "iv_pct": 138.9
       },
       {
         "exp": "2026-08-14",
         "dte": 16,
-        "iv_pct": 130.1
+        "iv_pct": 130.3
       },
       {
         "exp": "2026-08-21",
         "dte": 23,
-        "iv_pct": 127.4
+        "iv_pct": 127.6
       },
       {
         "exp": "2026-08-28",
         "dte": 30,
-        "iv_pct": 123.6
+        "iv_pct": 123.7
       },
       {
         "exp": "2026-09-04",
         "dte": 37,
-        "iv_pct": 121.6
+        "iv_pct": 122.1
       },
       {
         "exp": "2026-09-18",
         "dte": 51,
-        "iv_pct": 116.3
+        "iv_pct": 116.4
       },
       {
         "exp": "2026-10-16",
         "dte": 79,
-        "iv_pct": 112.6
+        "iv_pct": 113.0
       },
       {
         "exp": "2026-11-20",
         "dte": 114,
-        "iv_pct": 109.6
+        "iv_pct": 110.0
       },
       {
         "exp": "2026-12-18",
         "dte": 142,
-        "iv_pct": 107.7
+        "iv_pct": 107.1
       },
       {
         "exp": "2027-01-15",
         "dte": 170,
-        "iv_pct": 106.5
+        "iv_pct": 106.0
       }
     ]
   }
