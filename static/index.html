@@ -646,7 +646,9 @@ function drawIvTerm(options) {
     const m = new Map(o.term_structure.map(p => [p.exp, p.iv_pct]));
     return {
       label: STOCK_LABELS[o.ticker] || o.ticker, data: exps.map(e => m.get(e) ?? null),
-      borderColor: STOCK_COLORS[o.ticker] || "#999", pointRadius: 2.5, pointHoverRadius: 4,
+      borderColor: STOCK_COLORS[o.ticker] || "#999",
+      pointBackgroundColor: STOCK_COLORS[o.ticker] || "#999",
+      pointRadius: 2.5, pointHoverRadius: 4,
       borderWidth: 1.6, tension: .2, spanGaps: true, fill: false,
     };
   });
@@ -658,17 +660,21 @@ function drawIvTerm(options) {
 function drawIvHist(ivc) {
   const ctx = document.getElementById("ivHistChart");
   if (!ctx || !ivc || !(ivc.dates || []).length) return;
+  // 积累初期数据点少且无连线, 点要画大且实心填充(Chart.js默认点填充近乎透明)
+  const few = ivc.dates.length < 8;
   const ds = Object.keys(ivc.series).map(k => ({
     label: STOCK_LABELS[k] || k, data: ivc.series[k],
-    borderColor: STOCK_COLORS[k] || "#999", pointRadius: 2, pointHoverRadius: 4,
+    borderColor: STOCK_COLORS[k] || "#999", pointBackgroundColor: STOCK_COLORS[k] || "#999",
+    pointRadius: few ? 4 : 2, pointHoverRadius: few ? 6 : 4,
     borderWidth: 1.1, tension: .2, spanGaps: true, fill: false,
   }));
   // 合成IV(四标的均值): 白色粗线, 放最前
   if ((ivc.composite || []).some(v => v !== null)) {
     ds.unshift({
-      label: "合成IV(四标均值)", data: ivc.composite, borderColor: "#e8eaf0",
-      pointRadius: 3, pointHoverRadius: 5, borderWidth: 2.4, tension: .2,
-      spanGaps: true, fill: false,
+      label: "合成IV(四标均值)", data: ivc.composite,
+      borderColor: "#e8eaf0", pointBackgroundColor: "#e8eaf0",
+      pointRadius: few ? 5 : 3, pointHoverRadius: few ? 7 : 5, borderWidth: 2.4,
+      tension: .2, spanGaps: true, fill: false,
     });
   }
   // IV增速: 合成IV日变化(百分点), 右轴柱状
@@ -682,6 +688,7 @@ function drawIvHist(ivc) {
     });
   }
   const opts = baseOpts(undefined, undefined);
+  opts.scales.y.grace = "10%";  // 防止单点贴边被裁切
   if (hasGrowth) {
     opts.scales.y1 = {
       position: "right", grid: { drawOnChartArea: false },
@@ -689,7 +696,9 @@ function drawIvHist(ivc) {
       title: { display: true, text: "IV增速 (pp/日)", color: "#6b7280", font: {size: 11} },
     };
   }
-  opts.plugins.title = { display: true, text: "近月ATM IV历史 (年化%)", color: "#9aa3b2", font: {size: 12} };
+  opts.plugins.title = { display: true,
+    text: `近月ATM IV历史 (年化%) · 已积累${ivc.dates.length}个交易日`,
+    color: "#9aa3b2", font: {size: 12} };
   charts.push(new Chart(ctx, { type: "line", data: { labels: ivc.dates, datasets: ds }, options: opts }));
 }
 
