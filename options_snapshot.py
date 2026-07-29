@@ -153,7 +153,7 @@ def append_iv_history(results):
 
 
 if __name__ == "__main__":
-    tickers = sys.argv[1:] or ["MU", "SNDK", "WDC"]
+    tickers = sys.argv[1:] or ["MU", "SNDK", "WDC", "SKHY"]
     results = []
     for t in tickers:
         try:

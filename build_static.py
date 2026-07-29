@@ -70,7 +70,7 @@ def main():
     run("crowding_engine.py", required=True)
     run("theme_index.py", required=True)
 
-    n = run("options_snapshot.py", "MU", "SNDK", "WDC")
+    n = run("options_snapshot.py", "MU", "SNDK", "WDC", "SKHY")
     if n:
         notes.append("期权快照失败(主数据正常): " + n[:140])
 

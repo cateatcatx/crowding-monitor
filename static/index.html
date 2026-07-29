@@ -111,8 +111,9 @@ const LV = {
   red:    {name: "红 · 拥挤极值", cls: "red"},
   na:     {name: "—",            cls: "green"},
 };
-const STOCK_COLORS = {MU:"#60a5fa", SNDK:"#f472b6", WDC:"#34d399", SK_HYNIX:"#fbbf24", SAMSUNG:"#a78bfa"};
-const STOCK_LABELS = {MU:"美光", SNDK:"闪迪", WDC:"西数", SK_HYNIX:"SK海力士", SAMSUNG:"三星"};
+const STOCK_COLORS = {MU:"#60a5fa", SNDK:"#f472b6", WDC:"#34d399", SK_HYNIX:"#fbbf24", SAMSUNG:"#a78bfa", SKHY:"#fbbf24"};
+const STOCK_LABELS = {MU:"美光", SNDK:"闪迪", WDC:"西数", SK_HYNIX:"SK海力士", SAMSUNG:"三星", SKHY:"海力士ADR"};
+const RV_KEY = {SKHY: "SK_HYNIX"};  // ADR期权对应韩股正股的已实现波动率
 let charts = [];
 let IS_STATIC = false;
 
@@ -407,9 +408,9 @@ function render(d) {
 
   ${((d.options || []).some(o => (o.term_structure || []).length) || d.iv_chart) ? `
   <div class="panel">
-    <h2>存储股期权IV (美光/闪迪/西数)</h2>
+    <h2>存储链期权IV (美光/闪迪/西数/海力士ADR)</h2>
     <div class="sub">左: ATM IV期限结构, 曲线左高右低=近月恐慌溢价(倒挂, 卖put收租肥), 左低右高=正常升水 ·
-      右: 近月ATM IV历史(每日快照积累, 逐日加点) · <span class="c-green">拥挤分数红+IV仍低 = 买保护黄金窗口</span></div>
+      右: 白色粗线=四标的合成IV, 右轴柱=IV增速(日变化pp, <span class="c-red">连续转正加速=恐慌升级</span>, <span class="c-green">转负=波动见顶回落</span>), 每日快照积累</div>
     <div class="grid2">
       <div class="chart-box small"><canvas id="ivTermChart"></canvas></div>
       <div class="chart-box small"><canvas id="ivHistChart"></canvas></div>
@@ -423,7 +424,7 @@ function render(d) {
       ${d.options.length ? `<table>
         <tr><th>标的</th><th>现价</th><th>ATM IV</th><th>IV/RV</th><th>skew(C−P)</th><th>P/C量</th><th>P/C持仓</th></tr>
         ${d.options.map(o => {
-          const st = d.stocks.find(s => s.key === o.ticker);
+          const st = d.stocks.find(s => s.key === (RV_KEY[o.ticker] || o.ticker));
           const ivrv = (st && st.rv20 && o.near_atm_iv_pct) ? o.near_atm_iv_pct / st.rv20 : null;
           const ivrvCell = ivrv === null ? "—" :
             `<span class="${ivrv >= 1.3 ? "c-yellow" : ivrv <= 0.9 ? "c-blue" : ""}">${ivrv.toFixed(2)}</span>`;
@@ -659,10 +660,35 @@ function drawIvHist(ivc) {
   if (!ctx || !ivc || !(ivc.dates || []).length) return;
   const ds = Object.keys(ivc.series).map(k => ({
     label: STOCK_LABELS[k] || k, data: ivc.series[k],
-    borderColor: STOCK_COLORS[k] || "#999", pointRadius: 2.5, pointHoverRadius: 4,
-    borderWidth: 1.6, tension: .2, spanGaps: true, fill: false,
+    borderColor: STOCK_COLORS[k] || "#999", pointRadius: 2, pointHoverRadius: 4,
+    borderWidth: 1.1, tension: .2, spanGaps: true, fill: false,
   }));
+  // 合成IV(四标的均值): 白色粗线, 放最前
+  if ((ivc.composite || []).some(v => v !== null)) {
+    ds.unshift({
+      label: "合成IV(四标均值)", data: ivc.composite, borderColor: "#e8eaf0",
+      pointRadius: 3, pointHoverRadius: 5, borderWidth: 2.4, tension: .2,
+      spanGaps: true, fill: false,
+    });
+  }
+  // IV增速: 合成IV日变化(百分点), 右轴柱状
+  const hasGrowth = (ivc.growth || []).some(v => v !== null);
+  if (hasGrowth) {
+    ds.push({
+      type: "bar", label: "IV增速(pp/日)", data: ivc.growth, yAxisID: "y1",
+      backgroundColor: ivc.growth.map(v =>
+        v > 0 ? "rgba(248,113,113,.65)" : v < 0 ? "rgba(52,211,153,.6)" : "rgba(107,114,128,.5)"),
+      borderWidth: 0, borderRadius: 2, order: 3,
+    });
+  }
   const opts = baseOpts(undefined, undefined);
+  if (hasGrowth) {
+    opts.scales.y1 = {
+      position: "right", grid: { drawOnChartArea: false },
+      ticks: { color: "#6b7280" },
+      title: { display: true, text: "IV增速 (pp/日)", color: "#6b7280", font: {size: 11} },
+    };
+  }
   opts.plugins.title = { display: true, text: "近月ATM IV历史 (年化%)", color: "#9aa3b2", font: {size: 12} };
   charts.push(new Chart(ctx, { type: "line", data: { labels: ivc.dates, datasets: ds }, options: opts }));
 }

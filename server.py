@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")
 FOREIGN_FLOW_FILE = os.path.join(HERE, "data", "SK_HYNIX_FOREIGN_FLOW.csv")
 IV_HISTORY_FILE = os.path.join(HERE, "data", "IV_HISTORY.csv")
-IV_TICKERS = ["MU", "SNDK", "WDC"]
+IV_TICKERS = ["MU", "SNDK", "WDC", "SKHY"]
 PORT = 5690
 
 TARGETS = [
@@ -72,7 +72,7 @@ def refresh_pipeline():
         _run("crowding_engine.py")
         _run("theme_index.py")
         try:
-            _run("options_snapshot.py", "MU", "SNDK", "WDC")
+            _run("options_snapshot.py", "MU", "SNDK", "WDC", "SKHY")
         except Exception as e:  # 期权源偶发失败不影响主数据
             warnings.append(f"期权快照失败(主数据正常): {e}")
         _state["last_error"] = "; ".join(warnings) if warnings else None
@@ -333,9 +333,26 @@ def assemble_iv_history():
     for tk in IV_TICKERS:
         sub = df[df["ticker"] == tk].set_index("date")["atm_iv_pct"].reindex(dates)
         series[tk] = [_json_float(v, 1) for v in sub]
+
+    # 合成IV: 各日期可得标的的均值(至少2个标的才计)
+    composite = []
+    for i in range(len(dates)):
+        vals = [series[tk][i] for tk in IV_TICKERS if series[tk][i] is not None]
+        composite.append(round(sum(vals) / len(vals), 1) if len(vals) >= 2 else None)
+
+    # IV增速: 合成IV相邻快照日的变化(百分点)
+    growth = [None]
+    for i in range(1, len(composite)):
+        if composite[i] is not None and composite[i - 1] is not None:
+            growth.append(round(composite[i] - composite[i - 1], 1))
+        else:
+            growth.append(None)
+
     return {
         "dates": [pd.Timestamp(d).strftime("%y/%m/%d") for d in dates],
         "series": series,
+        "composite": composite,
+        "growth": growth,
     }
 
 
