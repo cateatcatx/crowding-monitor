@@ -1,44 +1,235 @@
 [
   {
     "ticker": "MU",
-    "spot": 980.6,
-    "asof": "2026-07-14 20:57",
-    "total_oi": 3716606.0,
-    "total_volume": 770348.0,
-    "pc_ratio_oi": 1.291,
-    "pc_ratio_vol": 1.011,
-    "near_atm_iv_pct": 96.0,
-    "near_call25d_iv_pct": 96.0,
-    "near_put25d_iv_pct": 99.8,
-    "skew_call_minus_put_pct": -3.75,
-    "near_otm_call_oi_share_pct": 11.0
+    "spot": 818.39,
+    "asof": "2026-07-29 21:00",
+    "total_oi": 3459590.0,
+    "total_volume": 736584.0,
+    "pc_ratio_oi": 1.241,
+    "pc_ratio_vol": 0.867,
+    "near_atm_iv_pct": 101.6,
+    "near_call25d_iv_pct": 97.8,
+    "near_put25d_iv_pct": 107.4,
+    "skew_call_minus_put_pct": -9.59,
+    "near_otm_call_oi_share_pct": 12.7,
+    "term_structure": [
+      {
+        "exp": "2026-07-31",
+        "dte": 2,
+        "iv_pct": 128.2
+      },
+      {
+        "exp": "2026-08-03",
+        "dte": 5,
+        "iv_pct": 104.6
+      },
+      {
+        "exp": "2026-08-05",
+        "dte": 7,
+        "iv_pct": 105.7
+      },
+      {
+        "exp": "2026-08-07",
+        "dte": 9,
+        "iv_pct": 110.8
+      },
+      {
+        "exp": "2026-08-10",
+        "dte": 12,
+        "iv_pct": 101.9
+      },
+      {
+        "exp": "2026-08-12",
+        "dte": 14,
+        "iv_pct": 101.8
+      },
+      {
+        "exp": "2026-08-14",
+        "dte": 16,
+        "iv_pct": 102.8
+      },
+      {
+        "exp": "2026-08-21",
+        "dte": 23,
+        "iv_pct": 98.5
+      },
+      {
+        "exp": "2026-08-28",
+        "dte": 30,
+        "iv_pct": 96.4
+      },
+      {
+        "exp": "2026-09-04",
+        "dte": 37,
+        "iv_pct": 94.5
+      },
+      {
+        "exp": "2026-09-18",
+        "dte": 51,
+        "iv_pct": 91.3
+      },
+      {
+        "exp": "2026-10-16",
+        "dte": 79,
+        "iv_pct": 91.4
+      },
+      {
+        "exp": "2026-11-20",
+        "dte": 114,
+        "iv_pct": 89.0
+      },
+      {
+        "exp": "2026-12-18",
+        "dte": 142,
+        "iv_pct": 87.4
+      },
+      {
+        "exp": "2027-01-15",
+        "dte": 170,
+        "iv_pct": 87.1
+      }
+    ]
   },
   {
     "ticker": "SNDK",
-    "spot": 1783.5,
-    "asof": "2026-07-14 20:57",
-    "total_oi": 836812.0,
-    "total_volume": 172073.0,
-    "pc_ratio_oi": 1.424,
-    "pc_ratio_vol": 1.509,
-    "near_atm_iv_pct": 136.4,
-    "near_call25d_iv_pct": 133.9,
-    "near_put25d_iv_pct": 145.6,
-    "skew_call_minus_put_pct": -11.7,
-    "near_otm_call_oi_share_pct": 14.2
+    "spot": 1090.46,
+    "asof": "2026-07-29 21:00",
+    "total_oi": 924026.0,
+    "total_volume": 225855.0,
+    "pc_ratio_oi": 1.255,
+    "pc_ratio_vol": 1.017,
+    "near_atm_iv_pct": 152.6,
+    "near_call25d_iv_pct": 144.2,
+    "near_put25d_iv_pct": 160.8,
+    "skew_call_minus_put_pct": -16.66,
+    "near_otm_call_oi_share_pct": 20.5,
+    "term_structure": [
+      {
+        "exp": "2026-07-31",
+        "dte": 2,
+        "iv_pct": 184.0
+      },
+      {
+        "exp": "2026-08-07",
+        "dte": 9,
+        "iv_pct": 177.9
+      },
+      {
+        "exp": "2026-08-14",
+        "dte": 16,
+        "iv_pct": 157.7
+      },
+      {
+        "exp": "2026-08-21",
+        "dte": 23,
+        "iv_pct": 147.0
+      },
+      {
+        "exp": "2026-08-28",
+        "dte": 30,
+        "iv_pct": 141.0
+      },
+      {
+        "exp": "2026-09-04",
+        "dte": 37,
+        "iv_pct": 135.9
+      },
+      {
+        "exp": "2026-09-18",
+        "dte": 51,
+        "iv_pct": 129.3
+      },
+      {
+        "exp": "2026-10-16",
+        "dte": 79,
+        "iv_pct": 124.1
+      },
+      {
+        "exp": "2026-11-20",
+        "dte": 114,
+        "iv_pct": 122.3
+      },
+      {
+        "exp": "2026-12-18",
+        "dte": 142,
+        "iv_pct": 119.1
+      },
+      {
+        "exp": "2027-01-15",
+        "dte": 170,
+        "iv_pct": 117.2
+      }
+    ]
   },
   {
     "ticker": "WDC",
-    "spot": 575.74,
-    "asof": "2026-07-14 20:57",
-    "total_oi": 456445.0,
-    "total_volume": 44358.0,
-    "pc_ratio_oi": 1.794,
-    "pc_ratio_vol": 1.235,
-    "near_atm_iv_pct": 105.8,
-    "near_call25d_iv_pct": 103.4,
-    "near_put25d_iv_pct": 111.1,
-    "skew_call_minus_put_pct": -7.74,
-    "near_otm_call_oi_share_pct": 14.7
+    "spot": 480.5,
+    "asof": "2026-07-29 21:00",
+    "total_oi": 407040.0,
+    "total_volume": 51380.0,
+    "pc_ratio_oi": 1.507,
+    "pc_ratio_vol": 1.623,
+    "near_atm_iv_pct": 117.5,
+    "near_call25d_iv_pct": 112.1,
+    "near_put25d_iv_pct": 125.0,
+    "skew_call_minus_put_pct": -12.93,
+    "near_otm_call_oi_share_pct": 17.1,
+    "term_structure": [
+      {
+        "exp": "2026-07-31",
+        "dte": 2,
+        "iv_pct": 159.5
+      },
+      {
+        "exp": "2026-08-07",
+        "dte": 9,
+        "iv_pct": 133.8
+      },
+      {
+        "exp": "2026-08-14",
+        "dte": 16,
+        "iv_pct": 118.3
+      },
+      {
+        "exp": "2026-08-21",
+        "dte": 23,
+        "iv_pct": 110.6
+      },
+      {
+        "exp": "2026-08-28",
+        "dte": 30,
+        "iv_pct": 106.8
+      },
+      {
+        "exp": "2026-09-04",
+        "dte": 37,
+        "iv_pct": 105.0
+      },
+      {
+        "exp": "2026-09-18",
+        "dte": 51,
+        "iv_pct": 101.0
+      },
+      {
+        "exp": "2026-10-16",
+        "dte": 79,
+        "iv_pct": 100.1
+      },
+      {
+        "exp": "2026-11-20",
+        "dte": 114,
+        "iv_pct": 100.1
+      },
+      {
+        "exp": "2026-12-18",
+        "dte": 142,
+        "iv_pct": 97.9
+      },
+      {
+        "exp": "2027-01-15",
+        "dte": 170,
+        "iv_pct": 96.4
+      }
+    ]
   }
 ]

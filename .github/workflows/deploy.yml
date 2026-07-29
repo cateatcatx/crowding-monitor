@@ -40,6 +40,15 @@ jobs:
           restore-keys: |
             foreign-flow-v2-${{ runner.os }}-
 
+      # IV历史靠每日快照积累(免费源无历史), 同样跨运行保留
+      - name: Restore IV history
+        uses: actions/cache@v4
+        with:
+          path: data/IV_HISTORY.csv
+          key: iv-history-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            iv-history-v1-${{ runner.os }}-
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

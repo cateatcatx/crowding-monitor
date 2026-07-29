@@ -405,6 +405,17 @@ function render(d) {
     </div>
   </div>
 
+  ${((d.options || []).some(o => (o.term_structure || []).length) || d.iv_chart) ? `
+  <div class="panel">
+    <h2>存储股期权IV (美光/闪迪/西数)</h2>
+    <div class="sub">左: ATM IV期限结构, 曲线左高右低=近月恐慌溢价(倒挂, 卖put收租肥), 左低右高=正常升水 ·
+      右: 近月ATM IV历史(每日快照积累, 逐日加点) · <span class="c-green">拥挤分数红+IV仍低 = 买保护黄金窗口</span></div>
+    <div class="grid2">
+      <div class="chart-box small"><canvas id="ivTermChart"></canvas></div>
+      <div class="chart-box small"><canvas id="ivHistChart"></canvas></div>
+    </div>
+  </div>` : ""}
+
   <div class="grid2">
     <div class="panel" style="margin-bottom:0">
       <h2>期权维度快照 (CBOE延迟报价)</h2>
@@ -448,6 +459,8 @@ function render(d) {
   drawScores(d.score_chart);
   drawRv(d.rv_chart);
   drawVolPct(d.vol_pct_chart);
+  drawIvTerm(d.options || []);
+  drawIvHist(d.iv_chart);
 }
 
 function hline(v, color, label) {
@@ -617,6 +630,41 @@ function drawVolPct(vc) {
     ]},
     options: opts,
   }));
+}
+
+function drawIvTerm(options) {
+  const ctx = document.getElementById("ivTermChart");
+  const withTs = options.filter(o => (o.term_structure || []).length);
+  if (!ctx || !withTs.length) return;
+  // 三只标的的到期日并集作为x轴
+  const expSet = new Set();
+  withTs.forEach(o => o.term_structure.forEach(p => expSet.add(p.exp)));
+  const exps = [...expSet].sort();
+  const labels = exps.map(e => e.slice(2).replace(/-/g, "/"));
+  const ds = withTs.map(o => {
+    const m = new Map(o.term_structure.map(p => [p.exp, p.iv_pct]));
+    return {
+      label: STOCK_LABELS[o.ticker] || o.ticker, data: exps.map(e => m.get(e) ?? null),
+      borderColor: STOCK_COLORS[o.ticker] || "#999", pointRadius: 2.5, pointHoverRadius: 4,
+      borderWidth: 1.6, tension: .2, spanGaps: true, fill: false,
+    };
+  });
+  const opts = baseOpts(undefined, undefined);
+  opts.plugins.title = { display: true, text: "ATM IV期限结构 (年化%, 按到期日)", color: "#9aa3b2", font: {size: 12} };
+  charts.push(new Chart(ctx, { type: "line", data: { labels, datasets: ds }, options: opts }));
+}
+
+function drawIvHist(ivc) {
+  const ctx = document.getElementById("ivHistChart");
+  if (!ctx || !ivc || !(ivc.dates || []).length) return;
+  const ds = Object.keys(ivc.series).map(k => ({
+    label: STOCK_LABELS[k] || k, data: ivc.series[k],
+    borderColor: STOCK_COLORS[k] || "#999", pointRadius: 2.5, pointHoverRadius: 4,
+    borderWidth: 1.6, tension: .2, spanGaps: true, fill: false,
+  }));
+  const opts = baseOpts(undefined, undefined);
+  opts.plugins.title = { display: true, text: "近月ATM IV历史 (年化%)", color: "#9aa3b2", font: {size: 12} };
+  charts.push(new Chart(ctx, { type: "line", data: { labels: ivc.dates, datasets: ds }, options: opts }));
 }
 
 function baseOpts(min, max) {

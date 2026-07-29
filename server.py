@@ -23,6 +23,8 @@ from flask import Flask, jsonify, send_from_directory
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")
 FOREIGN_FLOW_FILE = os.path.join(HERE, "data", "SK_HYNIX_FOREIGN_FLOW.csv")
+IV_HISTORY_FILE = os.path.join(HERE, "data", "IV_HISTORY.csv")
+IV_TICKERS = ["MU", "SNDK", "WDC"]
 PORT = 5690
 
 TARGETS = [
@@ -317,6 +319,26 @@ def assemble_foreign_flow(quote_asof=None):
     }
 
 
+def assemble_iv_history():
+    """存储股ATM IV历史(来自每日快照积累), 近一年窗口。"""
+    if not os.path.exists(IV_HISTORY_FILE):
+        return None
+    df = pd.read_csv(IV_HISTORY_FILE, parse_dates=["date"])
+    df = df.dropna(subset=["date"]).sort_values("date")
+    if df.empty:
+        return None
+    df = df[df["date"] >= df["date"].max() - pd.Timedelta(days=370)]
+    dates = sorted(df["date"].unique())
+    series = {}
+    for tk in IV_TICKERS:
+        sub = df[df["ticker"] == tk].set_index("date")["atm_iv_pct"].reindex(dates)
+        series[tk] = [_json_float(v, 1) for v in sub]
+    return {
+        "dates": [pd.Timestamp(d).strftime("%y/%m/%d") for d in dates],
+        "series": series,
+    }
+
+
 def assemble_dashboard():
     stocks = []
     score_series = {}
@@ -453,6 +475,7 @@ def assemble_dashboard():
         "vol_pct_chart": vol_pct_chart,
         "vol_pct_now": vol_pct_now,
         "options": options,
+        "iv_chart": assemble_iv_history(),
         "foreign_flow": foreign_flow,
         "summary": {"n_red": n_red, "n_triggered": n_triggered, "breadth": breadth_n},
     }

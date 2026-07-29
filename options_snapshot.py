@@ -6,8 +6,11 @@
   - 近月ATM隐含波动率: IV水平
   - 25Δ skew: OTM call IV - OTM put IV, 正值/收敛 = call抢筹(看涨投机拥挤)
   - 近月(<=45天)OTM call的OI占比: 投机筹码集中度
+  - ATM IV期限结构: 各到期日ATM IV(倒挂=近月恐慌, 陡贴水利于卖put)
 数据保存: out/{ticker}_options_snapshot.json
+历史积累: data/IV_HISTORY.csv (每日一行/标的, 供网页画IV历史曲线)
 """
+import csv
 import json
 import os
 import re
@@ -83,6 +86,21 @@ def analyze(ticker: str) -> dict:
     otm_call_near_oi = sum(o["oi"] for o in near_c if o["strike"] > spot)
     total_call_oi = oi_c or 1
 
+    # ATM IV期限结构: 每个到期日取现价±5%内合约的IV均值
+    by_exp = {}
+    for o in opts:
+        if o["dte"] < 1 or o["dte"] > 200 or o["iv"] <= 0:
+            continue
+        if abs(o["strike"] / spot - 1) > 0.05:
+            continue
+        by_exp.setdefault((o["exp"], o["dte"]), []).append(o["iv"])
+    term_structure = [
+        {"exp": exp.strftime("%Y-%m-%d"), "dte": dte,
+         "iv_pct": round(sum(ivs) / len(ivs) * 100, 1)}
+        for (exp, dte), ivs in sorted(by_exp.items())
+        if len(ivs) >= 2
+    ]
+
     res = {
         "ticker": ticker,
         "spot": spot,
@@ -96,8 +114,42 @@ def analyze(ticker: str) -> dict:
         "near_put25d_iv_pct": round(piv * 100, 1) if piv else None,
         "skew_call_minus_put_pct": round(skew * 100, 2) if skew is not None else None,
         "near_otm_call_oi_share_pct": round(otm_call_near_oi / total_call_oi * 100, 1),
+        "term_structure": term_structure,
     }
     return res
+
+
+IV_HISTORY_FILE = os.path.join(HERE, "data", "IV_HISTORY.csv")
+IV_HISTORY_COLS = ["date", "ticker", "spot", "atm_iv_pct", "call25d_iv_pct",
+                   "put25d_iv_pct", "skew_pct", "pc_ratio_vol", "pc_ratio_oi"]
+
+
+def append_iv_history(results):
+    """把当日快照按(date,ticker)去重后追加进历史CSV(同日多次运行取最后一次)。"""
+    os.makedirs(os.path.dirname(IV_HISTORY_FILE), exist_ok=True)
+    rows = {}
+    if os.path.exists(IV_HISTORY_FILE):
+        with open(IV_HISTORY_FILE, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                rows[(r["date"], r["ticker"])] = {c: r.get(c, "") for c in IV_HISTORY_COLS}
+    today = date.today().isoformat()
+    for res in results:
+        rows[(today, res["ticker"])] = {
+            "date": today,
+            "ticker": res["ticker"],
+            "spot": res["spot"],
+            "atm_iv_pct": res["near_atm_iv_pct"],
+            "call25d_iv_pct": res["near_call25d_iv_pct"],
+            "put25d_iv_pct": res["near_put25d_iv_pct"],
+            "skew_pct": res["skew_call_minus_put_pct"],
+            "pc_ratio_vol": res["pc_ratio_vol"],
+            "pc_ratio_oi": res["pc_ratio_oi"],
+        }
+    with open(IV_HISTORY_FILE, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=IV_HISTORY_COLS)
+        w.writeheader()
+        for key in sorted(rows):
+            w.writerow(rows[key])
 
 
 if __name__ == "__main__":
@@ -112,3 +164,5 @@ if __name__ == "__main__":
             print(f"{t}: FAILED {e}")
     with open(os.path.join(OUT_DIR, "options_snapshot.json"), "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
+    if results:
+        append_iv_history(results)
