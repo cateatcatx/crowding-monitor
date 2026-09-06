@@ -49,6 +49,8 @@ def main():
     if not args.no_fetch:
         print(">>> 拉取最新日线 ...")
         subprocess.run([py, os.path.join(HERE, "fetch_data.py")], check=False)
+        print(">>> 拉取SOXX/IGV相对强度 ...")
+        subprocess.run([py, os.path.join(HERE, "relative_strength.py")], check=False)
         print(">>> 拉取SK海力士外资流向 ...")
         subprocess.run(
             [
@@ -72,6 +74,14 @@ def main():
     print("=" * 100)
     print("AI硬件/存储 交易拥挤度日报")
     print("=" * 100)
+    from relative_strength import assemble_relative_strength
+    rotation = assemble_relative_strength()
+    if rotation["available"]:
+        print(f"SOXX/IGV 相对强度 ({rotation['asof']}): {rotation['summary']}")
+        if rotation["stale"]:
+            print("提示: SOXX/IGV数据日期已滞后，请检查更新。")
+    else:
+        print(rotation["error"])
 
     rows = []
     scores = {}

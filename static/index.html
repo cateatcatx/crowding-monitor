@@ -49,6 +49,9 @@
   .chart-box { position: relative; height: 300px; }
   .chart-box.small { height: 260px; }
   .chart-box.flow-chart { height: 320px; }
+  .rotation-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:10px 0; }
+  .rotation-toolbar button[aria-pressed="true"] { border-color:var(--blue); color:var(--blue); }
+  #rotationPanel .sub { color:var(--muted); }
   .flow-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
                margin: 12px 0 14px; }
   .flow-kpi { background: var(--panel2); border: 1px solid var(--line);
@@ -115,6 +118,7 @@ const STOCK_COLORS = {MU:"#60a5fa", SNDK:"#f472b6", WDC:"#34d399", SK_HYNIX:"#fb
 const STOCK_LABELS = {MU:"美光", SNDK:"闪迪", WDC:"西数", SK_HYNIX:"SK海力士", SAMSUNG:"三星", SKHY:"海力士ADR"};
 const RV_KEY = {SKHY: "SK_HYNIX"};  // ADR期权对应韩股正股的已实现波动率
 let charts = [];
+let rotationCharts = [], rotationData = null, rotationMonths = 3;
 let IS_STATIC = false;
 
 function fmtPrice(v, cur) {
@@ -271,6 +275,84 @@ function subCell(v, hot=90, warm=75) {
   return `<td class="${cls}">${v.toFixed(0)}</td>`;
 }
 
+function fmtRotationPct(value) {
+  const n = finiteNumber(value);
+  return n === null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
+function renderRotationPanel(r) {
+  if (!r || !r.available || !r.series || !r.summary) {
+    return `<section class="panel" id="rotationPanel"><h2>半导体 / 软件轮动 · SOXX / IGV</h2>
+      <div class="sub">${escapeHtml(r?.error || "暂无配对数据，更新数据后显示。")}</div></section>`;
+  }
+  const s = r.summary;
+  const maState = value => value === null ? "样本不足" : value ? "上方" : "下方";
+  return `<section class="panel" id="rotationPanel">
+    <h2>半导体 / 软件轮动 · SOXX / IGV</h2>
+    <div class="sub">截至 ${escapeHtml(r.asof)} · 来源：${escapeHtml(r.source)} · ${escapeHtml(r.basis)}。
+      比值上升=半导体相对更强，下降=软件相对更强；不计入TCI，不作为独立买卖信号。
+      ${r.stale ? '<span class="c-orange">距数据日超过4个自然日，请核对休市安排或刷新状态。</span>' : ''}</div>
+    <div class="flow-kpis">
+      <div class="flow-kpi"><div class="k">最新价格比值</div><div class="v c-blue">${finiteNumber(s.ratio)?.toFixed(4) ?? '—'}</div>
+        <div class="s">20日均线${maState(s.above_ma20)} · 60日均线${maState(s.above_ma60)}</div></div>
+      ${[5,20,60].map(n => `<div class="flow-kpi"><div class="k">近 ${n} 个交易日相对涨跌幅</div>
+        <div class="v">${fmtRotationPct(s[`change_${n}d_pct`])}</div>
+        <div class="s">比值变化，非两ETF收益率之差</div></div>`).join('')}
+    </div>
+    <div class="rotation-toolbar" role="group" aria-label="轮动图时间范围">
+      <button type="button" onclick="setRotationWindow(3)" data-rotation-months="3" aria-pressed="${rotationMonths===3}">近3个月</button>
+      <button type="button" onclick="setRotationWindow(12)" data-rotation-months="12" aria-pressed="${rotationMonths===12}">近1年</button>
+      <span class="meta" id="rotationRange"></span>
+    </div>
+    <div class="sub">上图：RS = (SOXX/IGV) ÷ 基准日比值 × 100，基准日 ${escapeHtml(r.base_date)}；均线使用完整历史计算。
+      下图：两ETF在所选窗口各自以100起步。点击图例可隐藏曲线。</div>
+    <div class="chart-box small"><canvas id="rotationRatioChart" role="img" aria-label="SOXX相对IGV强度及20、60日均线"></canvas></div>
+    <div class="chart-box small"><canvas id="rotationPricesChart" role="img" aria-label="SOXX和IGV归一化价格走势"></canvas></div>
+  </section>`;
+}
+
+function setRotationWindow(months) {
+  rotationMonths = months === 12 ? 12 : 3;
+  document.querySelectorAll('[data-rotation-months]').forEach(button => {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.rotationMonths) === rotationMonths));
+  });
+  drawRotation(rotationData);
+}
+
+function drawRotation(r) {
+  rotationCharts.forEach(chart => chart.destroy());
+  charts = charts.filter(chart => !rotationCharts.includes(chart));
+  rotationCharts = [];
+  if (!r?.available || !r.series?.dates?.length || !document.getElementById('rotationRatioChart')) return;
+  const series = r.series;
+  const cutoff = new Date(series.dates.at(-1) + 'T00:00:00Z');
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - rotationMonths);
+  const start = rotationMonths === 12 ? 0 : series.dates.findIndex(date => date >= cutoff.toISOString().slice(0,10));
+  const offset = Math.max(0, start), dates = series.dates.slice(offset);
+  document.getElementById('rotationRange').textContent = `${dates[0]} — ${dates.at(-1)} · ${dates.length}个共同交易日`;
+  const dataset = (label, values, color, dash=[]) => ({label, data:values, borderColor:color,
+    borderDash:dash, borderWidth:1.7, pointRadius:0, pointHoverRadius:4, tension:0, spanGaps:false});
+  const options = title => {
+    const opts = baseOpts(undefined, undefined);
+    opts.scales.y.title = {display:true, text:title, color:'#9aa3b2'};
+    opts.scales.x.title = {display:true, text:'美国交易日', color:'#9aa3b2'};
+    opts.scales.x.ticks.maxTicksLimit = window.innerWidth < 600 ? 4 : 10;
+    opts.scales.x.ticks.callback = function(value) {return this.getLabelForValue(value).slice(2);};
+    opts.plugins.tooltip.callbacks = {label:c=>`${c.dataset.label}: ${finiteNumber(c.raw)?.toFixed(2) ?? '—'}`};
+    return opts;
+  };
+  const ratio = new Chart(document.getElementById('rotationRatioChart'), {type:'line', data:{labels:dates, datasets:[
+    dataset('SOXX / IGV 相对强度', series.index.slice(offset), '#60a5fa'),
+    dataset('20日均线', series.ma20.slice(offset), '#34d399', [5,3]),
+    dataset('60日均线', series.ma60.slice(offset), '#fbbf24', [3,3]),
+  ]}, options:options('相对强度指数（基准日=100）')});
+  const prices = new Chart(document.getElementById('rotationPricesChart'), {type:'line', data:{labels:dates, datasets:[
+    dataset('SOXX 半导体', series.soxx.slice(offset).map(v=>v/series.soxx[offset]*100), '#60a5fa'),
+    dataset('IGV 软件', series.igv.slice(offset).map(v=>v/series.igv[offset]*100), '#f472b6'),
+  ]}, options:options('价格指数（窗口起点=100）')});
+  rotationCharts = [ratio, prices]; charts.push(...rotationCharts);
+}
+
 async function load() {
   let d = null;
   // 静态托管(GitHub Pages): 优先读构建时生成的 dashboard.json
@@ -297,6 +379,7 @@ async function load() {
 
 function render(d) {
   charts.forEach(c => c.destroy()); charts = [];
+  rotationCharts = []; rotationData = d.relative_strength;
   const meta = document.getElementById("meta");
   const btn = document.getElementById("btnRefresh");
   const banner = document.getElementById("banner");
@@ -456,6 +539,10 @@ function render(d) {
   </div>`;
 
   if (d.foreign_flow) drawForeignFlow(d.foreign_flow);
+  const rotationHost = document.createElement('div');
+  rotationHost.innerHTML = renderRotationPanel(d.relative_strength);
+  app.querySelector('.cards').after(rotationHost);
+  drawRotation(d.relative_strength);
   drawTci(t);
   drawScores(d.score_chart);
   drawRv(d.rv_chart);

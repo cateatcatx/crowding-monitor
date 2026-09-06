@@ -57,6 +57,9 @@ def main():
         n = run("fetch_data.py")
         if n:
             notes.append("部分行情抓取失败, 已使用上次数据: " + n[:140])
+        n = run("relative_strength.py")
+        if n:
+            notes.append("SOXX/IGV刷新失败，沿用上次配对数据: " + n[:140])
         flow_args = (
             ["--max-attempts", "4", "--retry-delay", "120"]
             if args.strict_flow_freshness

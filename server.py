@@ -19,6 +19,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, send_from_directory
+from relative_strength import assemble_relative_strength
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")
@@ -65,6 +66,10 @@ def refresh_pipeline():
     try:
         warnings = []
         _run("fetch_data.py")
+        try:
+            _run("relative_strength.py")
+        except Exception as e:
+            warnings.append(f"SOXX/IGV刷新失败(沿用上次配对数据): {e}")
         try:
             _run("fetch_sk_hynix_foreign_flow.py", "--skip-freshness-check")
         except Exception as e:  # 补充数据失败时沿用种子CSV
@@ -494,6 +499,7 @@ def assemble_dashboard():
         "options": options,
         "iv_chart": assemble_iv_history(),
         "foreign_flow": foreign_flow,
+        "relative_strength": assemble_relative_strength(),
         "summary": {"n_red": n_red, "n_triggered": n_triggered, "breadth": breadth_n},
     }
 

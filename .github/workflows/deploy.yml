@@ -49,6 +49,15 @@ jobs:
           restore-keys: |
             iv-history-v1-${{ runner.os }}-
 
+      # 配对保存SOXX/IGV，任一行情源失败时沿用最近一次成功数据。
+      - name: Restore SOXX-IGV history
+        uses: actions/cache@v4
+        with:
+          path: data/SOXX_IGV.csv
+          key: soxx-igv-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            soxx-igv-v1-${{ runner.os }}-
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
