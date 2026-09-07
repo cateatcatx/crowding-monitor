@@ -386,12 +386,12 @@ function render(d) {
   if (d.last_error) { banner.textContent = "提示: " + d.last_error; banner.className = "banner warn"; }
   else banner.className = "banner";
   if (IS_STATIC) {
-    meta.textContent = `数据生成于 ${d.generated_at} (UTC) · 每交易日自动更新两次(约北京时间 09:00 / 19:30)`;
+    meta.textContent = `数据生成于 ${d.generated_at}（北京时间 UTC+8） · 每交易日自动更新两次(约北京时间 09:00 / 19:30)`;
     btn.textContent = "刷新页面"; btn.disabled = false;
   } else {
     const age = (d.data_age_min == null) ? "" :
       ` · 数据新鲜度 ${d.data_age_min < 60 ? d.data_age_min + "分钟" : (d.data_age_min/60).toFixed(1) + "小时"}`;
-    meta.textContent = `生成 ${d.generated_at}${age}` + (d.last_refresh ? ` · 上次刷新 ${d.last_refresh}` : "");
+    meta.textContent = `生成 ${d.generated_at}（北京时间 UTC+8）${age}` + (d.last_refresh ? ` · 上次刷新 ${d.last_refresh}（北京时间）` : "");
     btn.disabled = d.refreshing;
     if (d.refreshing) { btn.textContent = "刷新中…"; setTimeout(load, 5000); }
     else btn.textContent = "更新数据";

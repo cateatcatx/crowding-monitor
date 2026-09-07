@@ -19,7 +19,6 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.join(HERE, "site")
@@ -80,7 +79,7 @@ def main():
     # 复用服务端的数据组装逻辑
     import server  # noqa: E402  (import 不会启动服务, 由 __main__ 守卫)
     data = server.assemble_dashboard()
-    data["last_refresh"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    data["last_refresh"] = server.beijing_now_text()
     data["refreshing"] = False
     if notes:
         data["last_error"] = "; ".join(notes)

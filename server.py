@@ -14,7 +14,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,12 @@ FOREIGN_FLOW_FILE = os.path.join(HERE, "data", "SK_HYNIX_FOREIGN_FLOW.csv")
 IV_HISTORY_FILE = os.path.join(HERE, "data", "IV_HISTORY.csv")
 IV_TICKERS = ["MU", "SNDK", "WDC", "SKHY"]
 PORT = 5690
+BEIJING_TZ = timezone(timedelta(hours=8))
+
+
+def beijing_now_text():
+    """Stable display timezone on both Windows and GitHub's UTC runners."""
+    return datetime.now(timezone.utc).astimezone(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 TARGETS = [
     {"key": "MU", "label": "美光 MU", "cur": "$"},
@@ -81,7 +87,7 @@ def refresh_pipeline():
         except Exception as e:  # 期权源偶发失败不影响主数据
             warnings.append(f"期权快照失败(主数据正常): {e}")
         _state["last_error"] = "; ".join(warnings) if warnings else None
-        _state["last_refresh"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _state["last_refresh"] = beijing_now_text()
     except Exception as e:
         _state["last_error"] = str(e)
     finally:
@@ -485,7 +491,8 @@ def assemble_dashboard():
     foreign_flow = assemble_foreign_flow(sk_hynix["date"] if sk_hynix else None)
 
     return {
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "generated_at": beijing_now_text(),
+        "display_timezone": "Asia/Shanghai",
         "data_age_min": round(data_age_seconds() / 60),
         "refreshing": _state["refreshing"],
         "last_refresh": _state["last_refresh"],
