@@ -304,10 +304,13 @@ function renderRotationPanel(r) {
   const s = r.summary;
   const maState = value => value === null ? "样本不足" : value ? "上方" : "下方";
   return `<section class="panel" id="rotationPanel">
-    <h2>半导体 / 软件轮动 · SOXX / IGV</h2>
+    <h2>半导体 / 软件轮动 · SOXX / IGV <span id="rotationFreshnessBadge" class="flow-status"></span></h2>
     <div class="sub">截至 ${escapeHtml(r.asof)} · 来源：${escapeHtml(r.source)} · ${escapeHtml(r.basis)}。
       比值上升=半导体相对更强，下降=软件相对更强；不计入TCI，不作为独立买卖信号。
-      ${r.stale ? '<span class="c-orange">距数据日超过4个自然日，请核对休市安排或刷新状态。</span>' : ''}</div>
+      本模块仅使用已完成的常规交易时段日线，不含盘中价格。</div>
+    <div id="rotationMarketStatus" class="sub" aria-live="polite"></div>
+    <div class="sub"><span id="rotationFetchedAt"></span> ·
+      <a class="source-link" href="${safeHttpsUrl(r.market?.source_url || 'https://www.nasdaq.com/market-activity/stock-market-holiday-schedule')}" target="_blank" rel="noopener">美股交易日历 ↗</a></div>
     <div class="flow-kpis">
       <div class="flow-kpi"><div class="k">最新价格比值</div><div class="v c-blue">${finiteNumber(s.ratio)?.toFixed(4) ?? '—'}</div>
         <div class="s">20日均线${maState(s.above_ma20)} · 60日均线${maState(s.above_ma60)}</div></div>
@@ -325,6 +328,49 @@ function renderRotationPanel(r) {
     <div class="chart-box small"><canvas id="rotationRatioChart" role="img" aria-label="SOXX相对IGV强度及20、60日均线"></canvas></div>
     <div class="chart-box small"><canvas id="rotationPricesChart" role="img" aria-label="SOXX和IGV归一化价格走势"></canvas></div>
   </section>`;
+}
+
+function rotationMarketView(r, now = Date.now()) {
+  const cal = r?.market?.calendar;
+  if (!cal?.sessions?.length) return {label:'日历状态待更新',cls:'yellow',text:'请刷新页面以获取交易日历状态。'};
+  const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));
+  if (today < cal.valid_from || today >= cal.valid_until) return {label:'日历需要刷新',cls:'yellow',text:'页面交易日历已超出有效期，请刷新或检查自动构建任务。'};
+  const completed = cal.sessions.filter(s=>Date.parse(s.close)<=now);
+  const ready = cal.sessions.filter(s=>Date.parse(s.close)+cal.grace_minutes*60000<=now);
+  const latest = completed.at(-1), expected = ready.at(-1);
+  const session = cal.sessions.find(s=>s.date===today);
+  const next = cal.sessions.find(s=>Date.parse(s.close)>now);
+  const isMissing = expected && r.asof < expected.date;
+  const isPending = latest && r.asof < latest.date && !isMissing;
+  const toBeijing = stamp => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(stamp));
+  let state;
+  if (!session) state = `美东 ${today} 休市`;
+  else if (now < Date.parse(session.open)) state = `美东 ${today} 常规交易尚未开盘`;
+  else if (now < Date.parse(session.close)) state = `美东 ${today} 正在交易，今日收盘价尚未形成`;
+  else state = `美东 ${today} 已收盘`;
+  const names = {'Labor Day':'美国劳动节休市','Thanksgiving':'美国感恩节休市','Christmas':'圣诞节休市','New Years Day':'元旦休市','Good Friday':'耶稣受难日休市'};
+  const closures = (cal.closures||[]).filter(d=>d.date>r.asof&&d.date<=today).slice(-7)
+    .map(d=>`${d.date.slice(5)} ${names[d.reason]||d.reason}`).join('；');
+  let text = `${state}。最近已收盘交易日：${latest?.date || '—'}。`;
+  if (isMissing) text += `数据待更新至 ${expected.date}，请查看抓取状态或等待下次自动检查。`;
+  else if (isPending) text += '等待数据源发布收盘日线（收盘后预留30分钟）。';
+  else text += `${r.asof} 已是最新可用收盘日期。`;
+  if (closures) text += ` ${closures}。`;
+  if (next) text += ` 下一次收盘：北京时间 ${toBeijing(next.close)}。`;
+  return {label:isMissing?'收盘数据待更新':isPending?'等待收盘数据落地':'已是最新收盘',cls:isMissing?'orange':isPending?'yellow':'green',text};
+}
+
+function updateRotationMarketStatus(r) {
+  const target = document.getElementById('rotationMarketStatus');
+  if (!target || !r?.available) return;
+  const view = rotationMarketView(r);
+  target.textContent = view.text;
+  const badge = document.getElementById('rotationFreshnessBadge');
+  badge.textContent = view.label; badge.className = 'flow-status bg-'+view.cls;
+  const stamp = r.fetched_at;
+  document.getElementById('rotationFetchedAt').textContent = stamp
+    ? '最近成功抓取：'+new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(stamp))+'（北京时间；与交易日期不同）'
+    : '抓取时间暂不可用';
 }
 
 function renderForwardPeSources(p) {
@@ -598,6 +644,7 @@ function render(d) {
   const rotationHost = document.createElement('div');
   rotationHost.innerHTML = renderRotationPanel(d.relative_strength);
   app.querySelector('.cards').after(rotationHost);
+  updateRotationMarketStatus(d.relative_strength);
   rotationHost.insertAdjacentHTML('afterend', renderForwardPePanel(d.forward_pe));
   drawForwardPe();
   drawRotation(d.relative_strength);
@@ -910,6 +957,8 @@ async function doRefresh() {
 }
 
 load();
+// Static Pages can stay open across the US open/close without freezing market status.
+setInterval(()=>updateRotationMarketStatus(rotationData), 60000);
 </script>
 </body>
 </html>

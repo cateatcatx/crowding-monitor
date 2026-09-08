@@ -9,6 +9,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 import requests
+from us_market_calendar import completed_daily_rows, market_context
 
 HERE = Path(__file__).resolve().parent
 CACHE_FILE = HERE / "data" / "SOXX_IGV.csv"
@@ -37,10 +38,7 @@ def fetch_close(symbol):
             result = response.json()["chart"]["result"][0]
             stamps = result["timestamp"]
             closes = result["indicators"]["quote"][0]["close"]
-            now = datetime.now(timezone.utc).timestamp()
-            # ETF regular sessions are 6.5 hours. Conservatively delay early closes.
-            rows = [(datetime.fromtimestamp(t, timezone.utc).date(), c)
-                    for t, c in zip(stamps, closes) if t + 6.5 * 3600 <= now]
+            rows = completed_daily_rows(stamps, closes)
             series = clean_close(pd.DataFrame(rows, columns=["date", "close"]))
             if len(series) < 61:
                 raise ValueError(f"{symbol}: fewer than 61 valid completed sessions")
@@ -89,7 +87,8 @@ def build_relative_strength(frame, now=None):
     selected = prices[prices.index >= end - pd.DateOffset(years=1)]
     window_ratio = ratio.reindex(selected.index)
     base = window_ratio.iloc[0]
-    current = pd.Timestamp(now if now is not None else datetime.now(timezone.utc)).date()
+    market = market_context(end, now=now)
+    fetched = pd.to_datetime(frame["fetched_at"], utc=True, errors="coerce").max() if "fetched_at" in frame else pd.NaT
 
     def number(value, digits=4):
         return round(float(value), digits) if pd.notna(value) and np.isfinite(value) else None
@@ -106,7 +105,9 @@ def build_relative_strength(frame, now=None):
     }
     return {
         "available": True, "asof": end.strftime("%Y-%m-%d"),
-        "stale": (current - end.date()).days > 4,
+        "stale": market["missing_sessions"] > 0,
+        "market": market,
+        "fetched_at": fetched.isoformat() if pd.notna(fetched) else None,
         "source": str(frame["source"].iloc[-1]) if "source" in frame else SOURCE,
         "basis": "日线收盘价比值，不含分红再投资；不是RSI或估值指标",
         "base_date": selected.index[0].strftime("%Y-%m-%d"),

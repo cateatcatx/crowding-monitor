@@ -5,3 +5,4 @@ akshare
 flask
 Pillow>=10,<13
 rapidocr_onnxruntime==1.4.4
+exchange-calendars>=4.11,<5
