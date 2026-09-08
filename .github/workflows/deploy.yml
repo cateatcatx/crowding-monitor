@@ -6,14 +6,15 @@ on:
   # 推送到 main 时构建
   push:
     branches: [main]
-  # 定时(UTC): 01:00 = 北京09:00(美股收盘后);
+  # 定时(UTC): 01:17 = 北京09:17，05:47 = 北京13:47补跑;
   # 11:30 = 北京19:30(NXT 20:00 KST收盘后留出数据落地缓冲)
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "17 1 * * *"
+    - cron: "47 5 * * *"
     - cron: "30 11 * * 1-5"
 
 permissions:
-  contents: read
+  contents: write # 只提交公开来源的Forward P/E原图、估算和更新状态
   pages: write
   id-token: write
 
@@ -25,6 +26,7 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -69,13 +71,39 @@ jobs:
       - name: Run tests
         run: python -X utf8 -m unittest discover -s tests -v
 
+      # 估值独立刷新；其他行情源失败不影响它的每日持久化。
+      - name: Refresh and digitize forward PE
+        id: pe
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python -X utf8 forward_pe.py --attempts 3
+
+      - name: Persist forward PE and report source dates
+        run: |
+          python - <<'PY'
+          import os
+          from forward_pe import assemble_forward_pe
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              f.write('## Forward P/E 图片估算更新\n\n')
+              for c in assemble_forward_pe()['charts']:
+                  s = c.get('digitized', {})
+                  f.write(f"- {c['label']}: 图例日期 {s.get('asof', '无')}，PE {s.get('latest_legend_pe', '无')}；{len(s.get('dates', []))} 个日历日插值。状态：{'失败/沿用缓存' if c.get('error') else '已检查'}\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/FORWARD_PE.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update forward PE image estimates and source status [skip ci]"
+            git push origin HEAD:main
+          fi
+
       - name: Build static site
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "30 11 * * 1-5" ]]; then
-            python -X utf8 build_static.py --strict-flow-freshness
+            python -X utf8 build_static.py --skip-forward-pe --strict-flow-freshness
           else
-            python -X utf8 build_static.py
+            python -X utf8 build_static.py --skip-forward-pe
           fi
 
       - uses: actions/configure-pages@v5
@@ -86,3 +114,10 @@ jobs:
 
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # 旧数据仍能上线，但失败必须可见，不能把缓存发布伪装为刷新成功。
+      - name: Flag forward PE refresh failure
+        if: steps.pe.outcome == 'failure'
+        run: |
+          echo "::error::Forward P/E刷新失败或源数据过旧。已发布上次成功结果，请查看摘要；下一定时任务将重试。"
+          exit 1

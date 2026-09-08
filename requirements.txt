@@ -3,3 +3,5 @@ numpy
 requests
 akshare
 flask
+Pillow>=10,<13
+rapidocr_onnxruntime==1.4.4

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI硬件股拥挤度日报</title>
 <script src="static/chart.umd.js"></script>
+<script src="static/forward_pe.js"></script>
 <style>
   :root {
     --bg: #0f1115; --panel: #171a21; --panel2: #1d212b; --line: #2a2f3a;
@@ -52,6 +53,21 @@
   .rotation-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:10px 0; }
   .rotation-toolbar button[aria-pressed="true"] { border-color:var(--blue); color:var(--blue); }
   #rotationPanel .sub { color:var(--muted); }
+  #forwardPePanel .sub { color:var(--muted); }
+  .pe-figure { min-width:0; margin:0; }
+  .pe-figure h3 { font-size:14px; margin:0 0 6px; }
+  .pe-image-button { display:block; width:100%; padding:0; overflow:hidden; background:white; }
+  .pe-image-button img { display:block; width:100%; height:auto; }
+  .pe-figure figcaption { margin-top:8px; font-size:12px; color:var(--muted); }
+  #peDialog { width:min(1600px, 98vw); max-width:98vw; max-height:96vh; padding:12px;
+              border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--text); }
+  #peDialog::backdrop { background:rgba(0,0,0,.8); }
+  #peDialog img { display:block; width:100%; height:auto; }
+  #peDialog .rotation-toolbar { margin-top:0; justify-content:space-between; }
+  #forwardPePanel input { color-scheme:dark; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:5px; max-width:100%; }
+  #forwardPePanel .pe-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #forwardPePanel summary { cursor:pointer; color:var(--blue); }
+  @media(max-width:600px) { #forwardPePanel .pe-kpis { grid-template-columns:1fr; } }
   .flow-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
                margin: 12px 0 14px; }
   .flow-kpi { background: var(--panel2); border: 1px solid var(--line);
@@ -311,6 +327,46 @@ function renderRotationPanel(r) {
   </section>`;
 }
 
+function renderForwardPeSources(p) {
+  const items = Array.isArray(p?.charts) ? p.charts : [];
+  return `<section class="panel" id="forwardPeSources">
+    <h2>Yardeni 来源原图</h2>
+    <div class="sub">${escapeHtml(p?.basis || '未来12个月一致预期盈利口径，单位：倍')}。硬件以标普500半导体行业代理，软件以标普500应用软件行业代理；
+      行业含非AI业务，不等同纯AI组合或SOXX／IGV的估值。估值模块不计入TCI。</div>
+    <div class="grid2">${items.map((c, i) => {
+      const valid = c.available && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(c.image_src || '');
+      return `<figure class="pe-figure">
+        <h3>${escapeHtml(c.label)}</h3>
+        <div class="sub">${escapeHtml(c.industry)}</div>
+        ${valid ? `<button type="button" class="pe-image-button" onclick="openPeChart(this)" aria-label="放大${escapeHtml(c.label)}历史曲线">
+          <img id="peImage${i}" src="${c.image_src}" alt="${escapeHtml(c.label)} Forward P/E 历史曲线，数据日期及最新倍数见图中图例" loading="lazy"
+            onerror="this.parentElement.hidden=true; this.parentElement.nextElementSibling.hidden=false">
+          </button><div class="sub c-orange" hidden>原图加载失败，请查看来源。</div>`
+          : '<div class="sub c-orange">Forward P/E 原图暂不可用，请更新数据或查看来源。</div>'}
+        <figcaption><a class="source-link" href="${safeHttpsUrl(c.source_url)}" target="_blank" rel="noopener">Yardeni 原始来源 ↗</a>
+          ${valid ? ` · 点击图表放大<br>原图抓取：${escapeHtml(c.fetched_at)}（北京时间，非行情日期）` : ''}
+          ${c.cache_stale ? '<br><span class="c-orange">原图超过4天未抓取，请更新数据。</span>' : ''}
+          ${c.error && valid ? '<br><span class="c-orange">本次抓取失败，当前显示上次成功缓存。</span>' : ''}
+        </figcaption>
+      </figure>`;
+    }).join('') || '<div class="sub">暂无估值原图，请更新数据。</div>'}</div>
+    <div class="sub" style="margin:12px 0 0">来源：${escapeHtml(p?.source || 'Yardeni Research / LSEG Datastream / S&P')}。
+      最新倍数、数据日期及历史范围以图内标注为准；两张原图纵轴刻度可能不同。交互曲线为图片反推估算，可用原图交叉核对。</div>
+    <dialog id="peDialog" aria-labelledby="peDialogTitle">
+      <div class="rotation-toolbar"><span id="peDialogTitle">Forward P/E 历史曲线</span>
+        <button type="button" onclick="document.getElementById('peDialog').close()">关闭</button></div>
+      <img id="peDialogImage" alt="Forward P/E 原图放大">
+    </dialog>
+  </section>`;
+}
+
+function openPeChart(button) {
+  const original = button.querySelector('img');
+  const image = document.getElementById('peDialogImage');
+  image.src = original.src; image.alt = original.alt;
+  document.getElementById('peDialog').showModal();
+}
+
 function setRotationWindow(months) {
   rotationMonths = months === 12 ? 12 : 3;
   document.querySelectorAll('[data-rotation-months]').forEach(button => {
@@ -386,7 +442,7 @@ function render(d) {
   if (d.last_error) { banner.textContent = "提示: " + d.last_error; banner.className = "banner warn"; }
   else banner.className = "banner";
   if (IS_STATIC) {
-    meta.textContent = `数据生成于 ${d.generated_at}（北京时间 UTC+8） · 每交易日自动更新两次(约北京时间 09:00 / 19:30)`;
+    meta.textContent = `数据生成于 ${d.generated_at}（北京时间 UTC+8） · 每日自动检查约 09:17 / 13:47，工作日加跑 19:30`;
     btn.textContent = "刷新页面"; btn.disabled = false;
   } else {
     const age = (d.data_age_min == null) ? "" :
@@ -542,6 +598,8 @@ function render(d) {
   const rotationHost = document.createElement('div');
   rotationHost.innerHTML = renderRotationPanel(d.relative_strength);
   app.querySelector('.cards').after(rotationHost);
+  rotationHost.insertAdjacentHTML('afterend', renderForwardPePanel(d.forward_pe));
+  drawForwardPe();
   drawRotation(d.relative_strength);
   drawTci(t);
   drawScores(d.score_chart);

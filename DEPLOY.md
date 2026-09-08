@@ -1,13 +1,14 @@
 # 免费发布到互联网 (GitHub Pages + Actions)
 
-网站会被托管在 GitHub 的服务器上, **不依赖你的电脑开机**, 数据每交易日自动更新两次。免费, 无需买域名。
+网站会被托管在 GitHub 的服务器上, **不依赖你的电脑开机**。每日北京时间约09:17、13:47检查更新，工作日19:30加跑。免费, 无需买域名。
 
 最终网址形如: `https://<你的GitHub用户名>.github.io/<仓库名>/`
 
 ## 原理
 
 - `build_static.py` 在 GitHub 的服务器上跑数据管线(拉新浪/Naver/CBOE → 算分 → 生成 `dashboard.json`), 连同网页一起发布到 GitHub Pages。
-- `.github/workflows/deploy.yml` 定时触发(北京时间约 09:00 / 19:30), 也可在网页上手动触发。第二次更新安排在NXT晚间收盘后, 并用ALL/KRX/NXT逐市场新鲜度校验确认数据已落地。
+- `.github/workflows/deploy.yml` 定时触发(北京时间约 09:17 / 13:47 / 工作日19:30), 也可在Actions网页上手动触发。晚间更新安排在NXT收盘后, 并用ALL/KRX/NXT逐市场新鲜度校验确认数据已落地。
+- Forward P/E先独立抓图、OCR校准并反推曲线，每张图最多重试3次；数据与状态提交至main的 `data/FORWARD_PE.json`，不依赖易淘汰的Actions缓存。工作流需要 `contents: write`，只写该公开数据文件。失败时保留旧数据、发布告警并将Actions标为失败；下次调度继续重试。
 - 页面前端优先读构建好的 `dashboard.json`(静态); 在你本机用 `server.py` 打开时仍走实时接口, 两种模式同一份 `index.html`。
 
 ## 一次性设置(约 5 分钟)
@@ -38,7 +39,7 @@ git push -u origin main
 
 ## 日常
 
-- 什么都不用做: 每交易日约 09:00 / 19:30(北京)自动重建并更新数据。
+- 每日约09:17、13:47(北京)自动重建，工作日19:30加跑。GitHub定时调度可能延迟，休市或数据源未发布时保留实际源日期。
 - 想立即更新: Actions 页面点 "Run workflow"; 或本机运行 `python build_static.py` 后 `git commit`/`push`(会触发重建)。
 - 网页上的"刷新页面"按钮只是重新加载当前已发布的数据。
 

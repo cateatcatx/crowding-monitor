@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, send_from_directory
 from relative_strength import assemble_relative_strength
+from forward_pe import assemble_forward_pe
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "out")
@@ -72,6 +73,10 @@ def refresh_pipeline():
     try:
         warnings = []
         _run("fetch_data.py")
+        try:
+            _run("forward_pe.py")
+        except Exception as e:
+            warnings.append(f"Forward P/E刷新失败(沿用上次原图): {e}")
         try:
             _run("relative_strength.py")
         except Exception as e:
@@ -507,6 +512,7 @@ def assemble_dashboard():
         "iv_chart": assemble_iv_history(),
         "foreign_flow": foreign_flow,
         "relative_strength": assemble_relative_strength(),
+        "forward_pe": assemble_forward_pe(),
         "summary": {"n_red": n_red, "n_triggered": n_triggered, "breadth": breadth_n},
     }
 

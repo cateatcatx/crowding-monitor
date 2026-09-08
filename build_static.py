@@ -26,11 +26,18 @@ SITE = os.path.join(HERE, "site")
 
 def run(script, *args, required=False, timeout=900):
     """跑一个子脚本。required=True 时失败抛异常; 否则返回错误摘要(成功返回 None)。"""
-    r = subprocess.run(
-        [sys.executable, "-X", "utf8", os.path.join(HERE, script), *args],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        cwd=HERE, timeout=timeout,
-    )
+    try:
+        r = subprocess.run(
+            [sys.executable, "-X", "utf8", os.path.join(HERE, script), *args],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=HERE, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        if required:
+            raise
+        message = f"{script}: 超时({timeout}秒)，保留上次数据"
+        print(f"[warn] {message}", flush=True)
+        return message
     if r.returncode != 0:
         msg = (r.stderr or r.stdout or "").strip().replace("\n", " ")[-300:]
         if required:
@@ -44,6 +51,7 @@ def run(script, *args, required=False, timeout=900):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-fetch", action="store_true", help="跳过数据抓取, 用现有CSV")
+    ap.add_argument("--skip-forward-pe", action="store_true", help="CI已单独刷新估值，避免重复抓取")
     ap.add_argument(
         "--strict-flow-freshness",
         action="store_true",
@@ -59,6 +67,10 @@ def main():
         n = run("relative_strength.py")
         if n:
             notes.append("SOXX/IGV刷新失败，沿用上次配对数据: " + n[:140])
+        if not args.skip_forward_pe:
+            n = run("forward_pe.py", timeout=360)
+            if n:
+                notes.append("Forward P/E刷新失败，沿用上次原图及估算: " + n[:140])
         flow_args = (
             ["--max-attempts", "4", "--retry-delay", "120"]
             if args.strict_flow_freshness
@@ -72,9 +84,10 @@ def main():
     run("crowding_engine.py", required=True)
     run("theme_index.py", required=True)
 
-    n = run("options_snapshot.py", "MU", "SNDK", "WDC", "SKHY")
-    if n:
-        notes.append("期权快照失败(主数据正常): " + n[:140])
+    if not args.no_fetch:
+        n = run("options_snapshot.py", "MU", "SNDK", "WDC", "SKHY")
+        if n:
+            notes.append("期权快照失败(主数据正常): " + n[:140])
 
     # 复用服务端的数据组装逻辑
     import server  # noqa: E402  (import 不会启动服务, 由 __main__ 守卫)
@@ -86,11 +99,15 @@ def main():
 
     # 组装 site/ 目录
     if os.path.isdir(SITE):
+        if os.path.realpath(SITE) != os.path.join(os.path.realpath(HERE), "site"):
+            raise RuntimeError("构建输出目录不在项目内")
         shutil.rmtree(SITE)
     os.makedirs(os.path.join(SITE, "static"), exist_ok=True)
     shutil.copy(os.path.join(HERE, "static", "index.html"), os.path.join(SITE, "index.html"))
     shutil.copy(os.path.join(HERE, "static", "chart.umd.js"),
                 os.path.join(SITE, "static", "chart.umd.js"))
+    shutil.copy(os.path.join(HERE, "static", "forward_pe.js"),
+                os.path.join(SITE, "static", "forward_pe.js"))
     with open(os.path.join(SITE, "dashboard.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     open(os.path.join(SITE, ".nojekyll"), "w").close()  # 关闭 Jekyll 处理

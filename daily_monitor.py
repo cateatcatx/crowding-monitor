@@ -51,6 +51,8 @@ def main():
         subprocess.run([py, os.path.join(HERE, "fetch_data.py")], check=False)
         print(">>> 拉取SOXX/IGV相对强度 ...")
         subprocess.run([py, os.path.join(HERE, "relative_strength.py")], check=False)
+        print(">>> 拉取AI硬件/软件Forward P/E原图 ...")
+        subprocess.run([py, os.path.join(HERE, "forward_pe.py")], check=False)
         print(">>> 拉取SK海力士外资流向 ...")
         subprocess.run(
             [

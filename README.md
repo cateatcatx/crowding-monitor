@@ -23,6 +23,19 @@
 - GitHub Actions跨运行缓存配对日线；首次运行或缓存不可用时回退到仓库种子数据。
 - 单独刷新：`python relative_strength.py`；仅读取缓存：`python relative_strength.py --no-fetch`。
 
+### AI 硬件 / 软件 Forward P/E
+
+- SOXX / IGV 轮动模块下方展示两条交互估值曲线：AI硬件代理为 **S&P 500 Semiconductors**，AI软件代理为 **S&P 500 Application Software**。行业包含非AI业务，成分并不等同SOXX/IGV，也不是纯AI组合估值。
+- 来源：Yardeni Research / LSEG Datastream / S&P。Forward P/E = 价格 ÷ 未来12个月一致预期每股经营盈利（NTM）；与TTM市盈率区分，不参与TCI评分。
+- `digitize_forward_pe.py` 用RapidOCR识别年份、PE刻度和最新图例，结合边框/刻度线校准坐标，再提取蓝色曲线的像素中位数。校准失配、末端与图例不符、数据日期倒退时拒绝替换旧数据。
+- **历史数值为图片反推估算，不是真实逐日一致预期数据。** 对像素采样做日历日线性插值（含周末和休市日），不外推到图例日期之后。当前横向分辨率约硬件4.93、软件6.72自然日/像素；显示两位小数仅用于保存，不代表该精度。图例遮挡或缺失区留空；原图本身不能恢复的尖峰也无法精确恢复。
+- 最新图例值和以后每天实际采集的图例值单独存为 `observations`，在对应日期覆盖像素估算；不会将历史插值伪装成图例观测。`low/high` 是像素列可见值包络，不是统计置信区间。
+- 支持3个月/1年/3年/5年/全部、自定义日期范围、悬浮读数、指定日期查询、最近20日明细和所选区间CSV导出。原图折叠保留，可放大核对日期、数据口径及来源。
+- 本地刷新、命令行抓取及静态构建均接入 `forward_pe.py`。原图、反推数值、历史图例读数、抓取时间和错误状态原子保存于 `data/FORWARD_PE.json`。相同图片复用已核验反推结果；每张图最多尝试3次，失败分别保留旧图与旧序列。原图日期超过7天会告警；抓取时间与数据日期分别显示。
+- GitHub Actions每天北京时间约 **09:17、13:47** 检查（后者补跑），工作日 **19:30** 再检查；数据源休市或尚未发布新图时保留原数据日期。估值在其他行情管线之前独立刷新，结果和状态直接提交回仓库main，避免Actions缓存淘汰丢失图例历史。只提交该公开数据文件。
+- 估值刷新失败时仍可发布旧结果，但Actions最终标失败并在摘要中记录源日期。定时任务是GitHub尽力调度，可能延迟；第三方源也可能中断，因此不能保证每天有新行情数据。每日持久化提交同时保留仓库活动记录。参见 [GitHub定时事件限制](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+- `python forward_pe.py` 单独刷新；`python forward_pe.py --no-fetch` 检查缓存。`python build_static.py --no-fetch` 完全离线构建；CI用 `--skip-forward-pe` 复用独立刷新步骤结果。
+
 **方式二: 命令行日报**
 
 ```bash
