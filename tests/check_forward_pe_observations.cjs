@@ -11,12 +11,12 @@ vm.createContext(context);vm.runInContext(fs.readFileSync('static/forward_pe.js'
 assert.equal(vm.runInContext("pePoint(chart,'2026-09-05')",context),null);
 assert.equal(vm.runInContext("pePoint(chart,'2026-09-04').value",context),16.7);
 const sets=vm.runInContext('peDatasets([chart],dates)',context);
-assert.equal(sets.length,2);assert.deepEqual(Array.from(sets[0].data),[16,null,null,null,null,null]);
-assert.deepEqual(Array.from(sets[1].data),[null,16.7,null,15.9,15.5,15.6]);
-assert.equal(sets[0].spanGaps,false);assert.equal(sets[1].pointRadius,3);
+assert.equal(sets.length,1);assert.deepEqual(Array.from(sets[0].data),[16,16.7,null,15.9,15.5,15.6]);
+assert.equal(sets[0].spanGaps,true);assert.equal(sets[0].pointRadius,0);
+assert.deepEqual(Array.from(sets[0].borderDash),[5,4]);
 vm.runInContext('peData={charts:[chart]}; exportPeCsv()',context);
 blob.text().then(csv=>{
   assert(csv.includes('"2026-09-05","","","missing"'));
   assert(csv.includes('"2026-09-11","15.6"'));
-  console.log('PASS: observed reversal preserved, missing days blank, separate datasets and CSV');
+  console.log('PASS: continuous dashed history/observations, no point markers, missing days blank in CSV');
 }).catch(e=>{console.error(e);process.exitCode=1;});

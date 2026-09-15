@@ -21,10 +21,16 @@ function peDatasets(available, dates) {
     const obs=new Map(s.observations.map(p=>[p.date,p.value])), first=[...obs.keys()].sort()[0];
     const points=dates.map(d=>obs.has(d)?{value:obs.get(d),observed:true}:
       d<first&&indices.has(d)&&s.values[indices.get(d)]!==null?{value:s.values[indices.get(d)],observed:false}:null);
-    return [
-      {key:c.key,label:c.label+' · 历史估算（虚线）',data:points.map(p=>p&&!p.observed?p.value:null),borderColor:color,borderDash:[5,4],borderWidth:1.5,pointRadius:0,pointHoverRadius:4,tension:0,spanGaps:false},
-      {key:c.key,label:c.label+' · 图例观测（圆点）',data:points.map(p=>p?.observed?p.value:null),borderColor:color,backgroundColor:color,borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:0,spanGaps:true},
-    ].filter(d=>d.data.some(v=>v!==null));
+    return [{key:c.key,label:c.label,data:points.map(p=>p?.value??null),
+      borderColor:color,borderDash:[5,4],borderWidth:1.5,pointRadius:0,pointHoverRadius:4,tension:0,spanGaps:true,
+      segment:{borderColor:ctx=>{
+        // Connect the collected readings to history, but retain historical occlusion gaps.
+        for(let i=ctx.p0DataIndex+1;i<ctx.p1DataIndex;i++) {
+          if(dates[i]<first && !points[i]) return 'transparent';
+        }
+        return color;
+      }},
+    }].filter(d=>d.data.some(v=>v!==null));
   });
 }
 function renderForwardPePanel(p) {
@@ -34,8 +40,8 @@ function renderForwardPePanel(p) {
   return `<section class="panel" id="forwardPePanel">
     <h2>AI 硬件 / 软件 · Forward P/E <span class="flow-status bg-yellow">历史估算 + 图例观测</span></h2>
     <div class="sub">半导体 / 应用软件行业代理 · 未来12个月一致预期经营盈利口径 · 不计入TCI。<br>
-      虚线为早期原图像素估算；圆点为开始采集后逐张原图的图例读数。近期缺少图例的日期留空，不用插值补出周末或缺失交易日的涨跌。
-      圆点间连线仅帮助阅读，不代表中间日期有观测。历史估算仍有日期和数值误差；原图遮挡处留空。</div>
+      虚线连接早期原图像素估算与后续图例读数，悬浮提示区分两种口径。近期缺少图例的日期不补值，连线仅帮助阅读，不代表中间日期有观测。
+      历史估算仍有日期和数值误差；原图遮挡处保留断线。</div>
     <div class="flow-kpis pe-kpis">${(p?.charts || []).map(c=>`<div class="flow-kpi">
       <div class="k">${escapeHtml(c.label)}</div><div class="v">${c.digitized ? c.digitized.latest_legend_pe.toFixed(1)+'×' : '—'}</div>
       <div class="s">图例数据日 ${escapeHtml(c.digitized?.asof || '暂不可用')} · ${escapeHtml(c.industry)}<br>
