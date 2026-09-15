@@ -91,6 +91,21 @@ def read_cache(path):
         return {"charts": {}}
 
 
+def retain_observation_only_tail(series):
+    """Never report synthetic daily changes once actual legend collection starts."""
+    observations = {p["date"]:p["value"] for p in series.get("observations", [])}
+    if not observations:
+        return series
+    first = min(observations)
+    for i, day in enumerate(series["dates"]):
+        if day >= first:
+            for field in ["values", "low", "high"]:
+                series[field][i] = observations.get(day)
+    series["observation_start"] = first
+    series["recent_policy"] = "legend_observations_only_no_interpolation"
+    return series
+
+
 def prepare_chart(config, previous, attempts=3):
     last_error = None
     for attempt in range(attempts):
@@ -114,7 +129,7 @@ def prepare_chart(config, previous, attempts=3):
                         i = indices[point["date"]]
                         for field in ["values", "low", "high"]:
                             series[field][i] = point["value"]
-            fresh["digitized"] = series
+            fresh["digitized"] = retain_observation_only_tail(series)
             fresh["last_checked_at"] = datetime.now(timezone.utc).isoformat()
             return fresh
         except Exception as exc:
@@ -173,7 +188,7 @@ def assemble_forward_pe(path=CACHE_FILE, now=None):
                         error=cached.get("error"))
             series = cached.get("digitized")
             if series and series.get("version") == VERSION:
-                item["digitized"] = series
+                item["digitized"] = retain_observation_only_tail(series)
                 item["data_stale"] = (current.date() - datetime.fromisoformat(series["asof"]).date()).days > 7
             item["last_checked_at"] = cached.get("last_checked_at", cached["fetched_at"])
         except (ValueError, KeyError, TypeError):
@@ -193,7 +208,7 @@ if __name__ == "__main__":
     for chart in assemble_forward_pe()["charts"]:
         series = chart.get("digitized", {})
         print(f"{chart['label']}: {series.get('asof', '未反推')} "
-              f"{len(series.get('dates', []))} 个日历日估算; "
+              f"{len(series.get('dates', []))} 个日历日位置，{len(series.get('observations', []))} 个图例观测; "
               f"横向分辨率 {series.get('days_per_pixel', '—')} 日/像素")
         if not series:
             warnings.append(f"{chart['label']} 缺少反推数据")

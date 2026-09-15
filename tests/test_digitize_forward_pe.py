@@ -15,6 +15,24 @@ NOW = datetime(2026, 9, 8, tzinfo=timezone.utc)
 
 
 class DigitizerTests(unittest.TestCase):
+    def test_recent_missing_dates_do_not_receive_pixel_estimates(self):
+        series={"dates":["2026-09-03","2026-09-04","2026-09-05","2026-09-08"],
+                "values":[16,16.2,15.8,15.7],"low":[15]*4,"high":[17]*4,
+                "observations":[{"date":"2026-09-04","value":16.7},{"date":"2026-09-08","value":15.9}]}
+        result=forward_pe.retain_observation_only_tail(series)
+        self.assertEqual(result["values"],[16,16.7,None,15.9])
+        self.assertIsNone(result["low"][2])
+        self.assertEqual(result["recent_policy"],"legend_observations_only_no_interpolation")
+
+    def test_software_endpoint_uses_visible_envelope_not_multiday_median(self):
+        content=(FIXTURES / "software-2026-09-14.png").read_bytes()
+        labels=json.loads((FIXTURES / "software-2026-09-14-ocr.json").read_text())
+        result=digitizer.digitize(content,now=datetime(2026,9,15,tzinfo=timezone.utc),ocr=labels)
+        self.assertEqual(result["asof"],"2026-09-14")
+        self.assertEqual(result["latest_legend_pe"],22.0)
+        self.assertGreater(result["endpoint_difference"],1.0)
+        self.assertLess(result["endpoint_range_distance"],.2)
+
     def fixture(self, key):
         return ((FIXTURES / f"{key}-2026-09-04.png").read_bytes(),
                 json.loads((FIXTURES / f"{key}-ocr.json").read_text()))

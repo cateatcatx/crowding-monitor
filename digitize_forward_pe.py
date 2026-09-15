@@ -6,7 +6,7 @@ import re
 import numpy as np
 from PIL import Image
 
-VERSION = 1
+VERSION = 2
 
 
 def ocr_image(image):
@@ -105,8 +105,13 @@ def digitize(content, now=None, ocr=None):
         raise ValueError("图例日期与曲线末端不符")
     latest = float(legend[2])
     last_y = np.flatnonzero(blue[:,xs[-1]])
-    endpoint = float(np.polyval(yfit, np.median(last_y)))
-    if abs(endpoint-latest) > max(1.0, abs(yfit[0])*8):
+    endpoint_values = np.polyval(yfit, last_y)
+    endpoint = float(np.median(endpoint_values))
+    endpoint_low, endpoint_high = float(endpoint_values.min()), float(endpoint_values.max())
+    # One pixel column contains several days. The actual legend endpoint need not
+    # equal its median; validate against the visible trace envelope instead.
+    endpoint_distance = max(endpoint_low-latest, latest-endpoint_high, 0)
+    if endpoint_distance > max(1.0, abs(yfit[0])*8):
         raise ValueError("曲线末端与图例PE不符")
 
     # Native per-column samples preserve the image's true time resolution and envelope.
@@ -140,6 +145,8 @@ def digitize(content, now=None, ocr=None):
         "bounds": [left,top,right,bottom], "pixel_samples": len(samples),
         "axis_years": len(xpoints), "axis_pe_ticks": len(ypoints),
         "endpoint_difference": round(abs(endpoint-latest), 3),
+        "endpoint_visible_range": [round(endpoint_low,3),round(endpoint_high,3)],
+        "endpoint_range_distance": round(endpoint_distance,3),
         "dates": [date.fromordinal(int(d)).isoformat() for d in days],
         "values": [None if gap else number(v) for v,gap in zip(values,missing)],
         "low": [None if gap else number(v) for v,gap in zip(low,missing)],
