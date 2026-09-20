@@ -39,7 +39,9 @@ def run(script, *args, required=False, timeout=900):
         print(f"[warn] {message}", flush=True)
         return message
     if r.returncode != 0:
-        msg = (r.stderr or r.stdout or "").strip().replace("\n", " ")[-300:]
+        # Show the actual final exception, not a truncated middle of its traceback.
+        lines = [line.strip() for line in (r.stderr or r.stdout or "").splitlines() if line.strip()]
+        msg = lines[-1][-300:] if lines else "无错误详情"
         if required:
             raise RuntimeError(f"{script} 失败: {msg}")
         print(f"[warn] {script} 非零退出: {msg}", flush=True)
@@ -78,7 +80,7 @@ def main():
         )
         n = run("fetch_sk_hynix_foreign_flow.py", *flow_args, timeout=900)
         if n:
-            notes.append("SK海力士外资流向抓取失败, 已使用上次数据: " + n[:140])
+            notes.append("SK海力士外资流向抓取失败, 已使用上次数据: " + n)
 
     # 必需步骤: 用现有(或刚抓取的)CSV 计算分数与总指数
     run("crowding_engine.py", required=True)

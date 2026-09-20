@@ -52,7 +52,7 @@ OUTPUT_COLUMNS = [
 def source_url(market: str) -> str:
     return (
         "https://m.stock.naver.com/domestic/stock/000660/"
-        f"tradingTrend?marketType={market}"
+        f"tradingTrend?stockEndTradingTrendExchange={market}"
     )
 
 
@@ -80,6 +80,10 @@ def parse_pct(value) -> float | None:
 
 def normalize_record(raw: dict, market: str = "KRX") -> dict:
     """规范一条 Naver 返回记录，字段名和单位在此处固定。"""
+    if not isinstance(raw, dict):
+        raise ValueError("Naver 投资者趋势记录不是对象")
+    if "localTradedAt" in raw:
+        return normalize_current_record(raw, market)
     bizdate = str(raw.get("bizdate", ""))
     parsed_date = datetime.strptime(bizdate, "%Y%m%d").date()
     net_shares = parse_int(raw.get("foreignerPureBuyQuant"))
@@ -100,6 +104,60 @@ def normalize_record(raw: dict, market: str = "KRX") -> dict:
     }
 
 
+def normalize_current_record(raw: dict, market: str) -> dict:
+    """2026-09新版：日期/持股比例在顶层，成交净额在krx/nxt分项内。"""
+    parsed_date = date.fromisoformat(str(raw["localTradedAt"]))
+    venues = ("KRX", "NXT") if market == "ALL" else (market,)
+    if market == "ALL" and parsed_date < SK_HYNIX_NXT_START_DATE:
+        venues = ("KRX",)
+    parts = []
+    for venue in venues:
+        part = raw.get(venue.lower())
+        if not isinstance(part, dict) or parse_int(part.get("foreignNetVolume")) is None:
+            # A missing venue after NXT launch is NOT zero flow.
+            raise ValueError(f"{parsed_date} {market}缺少{venue}外资净买卖分项")
+        parts.append(part)
+
+    def summed(field):
+        values = [parse_int(part.get(field)) for part in parts]
+        return sum(values) if all(value is not None for value in values) else None
+
+    close = raw.get("krx") if market == "ALL" else parts[0]
+    return {
+        "date": parsed_date.isoformat(), "ticker": "000660", "market": market,
+        "foreign_net_shares": summed("foreignNetVolume"),
+        "institution_net_shares": summed("organizationNetVolume"),
+        "individual_net_shares": summed("individualNetVolume"),
+        "foreign_holding_ratio_pct": parse_pct(raw.get("foreignHoldingRatio")),
+        "close_krw": parse_int(close.get("closingPrice")),
+        "volume_shares": summed("tradingVolume"),
+        "source": "Naver Finance", "source_url": source_url(market),
+    }
+
+
+def unpack_page(payload):
+    """Accept both old flat lists and the new items/hasNext/opaque-cursor envelope."""
+    if not isinstance(payload, dict) or not payload.get("isSuccess"):
+        raise RuntimeError(f"Naver 返回失败: {payload}")
+    result = payload.get("result")
+    if isinstance(result, list):
+        if any(not isinstance(row, dict) for row in result):
+            raise ValueError("Naver result列表中含有非对象记录")
+        cursor = str(result[-1].get("bizdate", "")) if result else None
+        return result, bool(result), cursor, "bizdate"
+    if not isinstance(result, dict) or not isinstance(result.get("items"), list):
+        raise ValueError("Naver 返回未知结构：缺少result.items列表")
+    batch = result["items"]
+    if any(not isinstance(row, dict) for row in batch):
+        raise ValueError("Naver result.items中含有非对象记录")
+    has_next, cursor = result.get("hasNext"), result.get("cursor")
+    if not isinstance(has_next, bool):
+        raise ValueError("Naver 分页缺少hasNext布尔值")
+    if has_next and (not batch or not isinstance(cursor, str) or not cursor):
+        raise ValueError("Naver 分页声明有下一页，但记录或游标缺失")
+    return batch, has_next, cursor, "cursor"
+
+
 def fetch_since(
     start: date,
     *,
@@ -108,30 +166,33 @@ def fetch_since(
     sleep_seconds: float = 0.15,
     max_pages: int = 20,
 ) -> pd.DataFrame:
-    """分页抓取 start（含）之后的数据；bizdate 是排他性翻页游标。"""
+    """分页抓取start（含）之后数据，透传服务端cursor，兼容旧版bizdate。"""
     if market not in MARKETS:
         raise ValueError(f"不支持的市场口径: {market}")
     rows: list[dict] = []
     cursor: str | None = None
+    cursor_parameter = "cursor"
+    seen_cursors = set()
+    previous_oldest = None
 
     with requests.Session() as session:
         session.headers.update(HEADERS)
         for _ in range(max_pages):
             params = {
                 "code": "000660",
+                "exchangeType": market,
+                "size": 50,
+                # Keep legacy parameter names for older deployments of the API.
                 "marketType": market,
                 "pageSize": 50,
             }
             if cursor:
-                params["bizdate"] = cursor
+                params[cursor_parameter] = cursor
 
             response = session.get(API_URL, params=params, timeout=timeout)
             response.raise_for_status()
             payload = response.json()
-            if not payload.get("isSuccess"):
-                raise RuntimeError(f"Naver 返回失败: {payload}")
-
-            batch = payload.get("result") or []
+            batch, has_next, next_cursor, next_parameter = unpack_page(payload)
             if not batch:
                 break
 
@@ -139,13 +200,17 @@ def fetch_since(
             rows.extend(normalized)
             oldest = min(datetime.strptime(r["date"], "%Y-%m-%d").date()
                          for r in normalized)
-            if oldest <= start:
+            if previous_oldest is not None and oldest >= previous_oldest:
+                raise RuntimeError("Naver 分页日期没有前进，保留上次数据")
+            previous_oldest = oldest
+            if oldest <= start or not has_next:
                 break
 
-            next_cursor = str(batch[-1].get("bizdate", ""))
-            if not next_cursor or next_cursor == cursor:
+            if not next_cursor or next_cursor in seen_cursors:
                 raise RuntimeError("Naver 分页游标没有前进")
+            seen_cursors.add(next_cursor)
             cursor = next_cursor
+            cursor_parameter = next_parameter
             if sleep_seconds:
                 time.sleep(sleep_seconds)
         else:

@@ -47,7 +47,7 @@ class ForeignFlowParsingTests(unittest.TestCase):
         self.assertEqual(record["institution_net_shares"], -148151)
         self.assertEqual(record["foreign_holding_ratio_pct"], 52.6)
         self.assertEqual(record["close_krw"], 1947000)
-        self.assertIn("marketType=ALL", record["source_url"])
+        self.assertIn("stockEndTradingTrendExchange=ALL", record["source_url"])
 
     def test_reference_date_and_freshness_check(self):
         with TemporaryDirectory() as temp_dir:
